@@ -8,6 +8,7 @@ import Student from '../models/Student.js';
 import Parent from '../models/Parent.js';
 import ApiError from '../utils/ApiError.js';
 import ENV from '../config/env.js';
+import emailService from './emailService.js';
 
 export const generateTokens = (user) => {
   const payload = {
@@ -88,11 +89,17 @@ export const changeUserPassword = async (userId, { currentPassword, newPassword 
   return { message: 'Password updated successfully' };
 };
 
-export const requestPasswordReset = async (email) => {
-  const user = await User.findOne({ email: email.toLowerCase() });
+export const requestPasswordReset = async (identifier, clientBaseUrl = null) => {
+  const cleanId = (identifier || '').trim().toLowerCase();
+  const user = await User.findOne({
+    $or: [{ email: cleanId }, { username: cleanId }],
+  });
+
   if (!user) {
-    // Return friendly message even if email not found to avoid user enumeration
-    return { message: 'If an account with that email exists, a password reset link has been dispatched.' };
+    // Return friendly message even if email/username not found to prevent user enumeration
+    return {
+      message: 'If an account matching those credentials exists, password reset instructions have been dispatched.',
+    };
   }
 
   const resetToken = crypto.randomBytes(32).toString('hex');
@@ -102,10 +109,27 @@ export const requestPasswordReset = async (email) => {
   user.passwordResetExpires = Date.now() + 30 * 60 * 1000; // 30 minutes validity
   await user.save({ validateBeforeSave: false });
 
-  // In production, this token is sent via Email / SMS
+  const clientUrl = clientBaseUrl || ENV.CLIENT_URL;
+  const resetLink = `${clientUrl.replace(/\/+$/, '')}/reset-password/${resetToken}`;
+
+  let emailResult = { delivered: false };
+  if (user.email && user.email.includes('@')) {
+    emailResult = await emailService.sendPasswordResetEmail({
+      to: user.email,
+      username: user.username,
+      resetLink,
+    });
+  }
+
   return {
-    message: 'If an account with that email exists, a password reset link has been dispatched.',
-    debugResetToken: ENV.NODE_ENV === 'development' ? resetToken : undefined,
+    message: emailResult.delivered
+      ? `A password reset link has been dispatched to ${user.email}. Please check your inbox and spam folder.`
+      : (emailResult.reason === 'unconfigured'
+          ? 'Email server is currently not configured with SMTP credentials. Use the direct link below to reset your password.'
+          : 'Password reset link prepared.'),
+    resetLink: !emailResult.delivered ? resetLink : undefined,
+    userEmail: user.email,
+    delivered: emailResult.delivered,
   };
 };
 
@@ -149,6 +173,26 @@ export const getUserProfile = async (userId) => {
   return user;
 };
 
+export const updateUserProfile = async (userId, { email }) => {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw ApiError.notFound('User not found');
+  }
+
+  if (email) {
+    const cleanEmail = email.trim().toLowerCase();
+    const existing = await User.findOne({ email: cleanEmail, _id: { $ne: userId } });
+    if (existing) {
+      throw ApiError.badRequest('This email address is already in use by another account.');
+    }
+    user.email = cleanEmail;
+  }
+
+  await user.save({ validateBeforeSave: false });
+
+  return getUserProfile(userId);
+};
+
 export default {
   generateTokens,
   loginUser,
@@ -156,4 +200,5 @@ export default {
   requestPasswordReset,
   resetUserPassword,
   getUserProfile,
+  updateUserProfile,
 };

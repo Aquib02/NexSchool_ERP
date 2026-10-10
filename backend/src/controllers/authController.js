@@ -41,8 +41,15 @@ export const changePassword = asyncHandler(async (req, res) => {
   return ApiResponse.ok(res, null, result.message);
 });
 
+export const updateProfile = asyncHandler(async (req, res) => {
+  const updatedUser = await authService.updateUserProfile(req.user._id, req.body);
+  return ApiResponse.ok(res, updatedUser, 'Profile updated successfully');
+});
+
 export const forgotPassword = asyncHandler(async (req, res) => {
-  const result = await authService.requestPasswordReset(req.body.email);
+  const identifier = req.body.email || req.body.username || req.body.identifier;
+  const clientOrigin = req.headers.origin || null;
+  const result = await authService.requestPasswordReset(identifier, clientOrigin);
   return ApiResponse.ok(res, result, result.message);
 });
 

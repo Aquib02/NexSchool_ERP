@@ -39,9 +39,9 @@ export const validatePasswordChange = (req, res, next) => {
 };
 
 export const validateForgotPassword = (req, res, next) => {
-  const { email } = req.body;
-  if (!email || !/\S+@\S+\.\S+/.test(email)) {
-    return next(new ApiError(400, 'A valid email address is required to request a reset link'));
+  const identifier = req.body.email || req.body.username || req.body.identifier;
+  if (!identifier || typeof identifier !== 'string' || !identifier.trim()) {
+    return next(new ApiError(400, 'A valid username or email address is required to request a reset link'));
   }
   next();
 };

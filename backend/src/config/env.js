@@ -11,6 +11,15 @@ export const ENV = {
   JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || 'dev_fallback_refresh_secret_key_2026',
   JWT_REFRESH_EXPIRE: process.env.JWT_REFRESH_EXPIRE || '7d',
   CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  CLIENT_URL: process.env.CLIENT_URL || process.env.CORS_ORIGIN || 'https://nexschool-erp-1.onrender.com',
+  EMAIL: {
+    SERVICE: process.env.EMAIL_SERVICE || 'gmail',
+    HOST: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    PORT: parseInt(process.env.EMAIL_PORT, 10) || 587,
+    USER: process.env.EMAIL_USER || '',
+    PASS: process.env.EMAIL_PASS || '',
+    FROM: process.env.EMAIL_FROM || process.env.EMAIL_USER || 'NexSchool ERP <noreply@nexschool.internal>',
+  },
   SUPER_ADMIN: {
     USERNAME: process.env.SUPER_ADMIN_USERNAME || 'admin',
     EMAIL: process.env.SUPER_ADMIN_EMAIL || 'admin@schoolerp.internal',

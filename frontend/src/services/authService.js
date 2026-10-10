@@ -18,12 +18,19 @@ export const authService = {
     return apiClient.get('/auth/me');
   },
 
+  updateProfile: async (data) => {
+    return apiClient.put('/auth/profile', data);
+  },
+
   changePassword: async (passwordData) => {
     return apiClient.put('/auth/change-password', passwordData);
   },
 
-  forgotPassword: async (email) => {
-    return apiClient.post('/auth/forgot-password', { email });
+  forgotPassword: async (identifier) => {
+    return apiClient.post('/auth/forgot-password', {
+      email: identifier,
+      identifier,
+    });
   },
 
   resetPassword: async (token, passwords) => {
