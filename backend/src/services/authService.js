@@ -89,48 +89,98 @@ export const changeUserPassword = async (userId, { currentPassword, newPassword 
   return { message: 'Password updated successfully' };
 };
 
-export const requestPasswordReset = async (identifier, clientBaseUrl = null) => {
-  const cleanId = (identifier || '').trim().toLowerCase();
-  const user = await User.findOne({
-    $or: [{ email: cleanId }, { username: cleanId }],
-  });
-
-  if (!user) {
-    // Return friendly message even if email/username not found to prevent user enumeration
-    return {
-      message: 'If an account matching those credentials exists, password reset instructions have been dispatched.',
-    };
-  }
-
-  const resetToken = crypto.randomBytes(32).toString('hex');
-  const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-
-  user.passwordResetToken = hashedToken;
-  user.passwordResetExpires = Date.now() + 30 * 60 * 1000; // 30 minutes validity
-  await user.save({ validateBeforeSave: false });
-
-  const clientUrl = clientBaseUrl || ENV.CLIENT_URL;
-  const resetLink = `${clientUrl.replace(/\/+$/, '')}/reset-password/${resetToken}`;
-
-  let emailResult = { delivered: false };
-  if (user.email && user.email.includes('@')) {
-    emailResult = await emailService.sendPasswordResetEmail({
-      to: user.email,
-      username: user.username,
-      resetLink,
+export const sendPasswordOtp = async ({ identifier, userId }) => {
+  let user = null;
+  if (userId) {
+    user = await User.findById(userId);
+  } else if (identifier) {
+    const cleanId = identifier.trim().toLowerCase();
+    user = await User.findOne({
+      $or: [{ email: cleanId }, { username: cleanId }],
     });
   }
 
+  if (!user) {
+    return {
+      message: 'If an account matching those credentials exists, a verification OTP code has been dispatched.',
+      delivered: false,
+    };
+  }
+
+  // Generate 6-digit numeric OTP
+  const otp = Math.floor(100000 + crypto.randomInt(900000)).toString();
+  const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
+
+  user.passwordResetOtp = hashedOtp;
+  user.passwordResetOtpExpires = Date.now() + 10 * 60 * 1000; // 10 minutes validity
+  await user.save({ validateBeforeSave: false });
+
+  let emailResult = { delivered: false };
+  if (user.email && user.email.includes('@')) {
+    emailResult = await emailService.sendPasswordResetOtpEmail({
+      to: user.email,
+      username: user.username,
+      otp,
+    });
+  }
+
+  const maskedEmail = user.email
+    ? user.email.replace(/(.{2})(.*)(?=@)/, (g1, g2, g3) => g2 + '*'.repeat(Math.max(1, g3.length)))
+    : '';
+
   return {
     message: emailResult.delivered
-      ? `A password reset link has been dispatched to ${user.email}. Please check your inbox and spam folder.`
+      ? `A 6-digit OTP verification code has been dispatched to ${user.email}. Please check your inbox and spam folder.`
       : (emailResult.reason === 'unconfigured'
-          ? 'Email server is currently not configured with SMTP credentials. Use the direct link below to reset your password.'
-          : 'Password reset link prepared.'),
-    resetLink: !emailResult.delivered ? resetLink : undefined,
-    userEmail: user.email,
+          ? `Email server is currently not configured with SMTP credentials. For testing, your 6-digit OTP is: ${otp}`
+          : 'A 6-digit verification code has been prepared.'),
+    email: user.email,
+    maskedEmail,
     delivered: emailResult.delivered,
+    debugOtp: !emailResult.delivered ? otp : undefined,
   };
+};
+
+export const verifyPasswordOtp = async ({ identifier, userId, otp, newPassword }) => {
+  if (!otp || typeof otp !== 'string' || otp.trim().length !== 6) {
+    throw ApiError.badRequest('A valid 6-digit OTP code is required.');
+  }
+
+  if (!newPassword || newPassword.length < 6) {
+    throw ApiError.badRequest('New password must be at least 6 characters.');
+  }
+
+  const cleanOtp = otp.trim();
+  const hashedOtp = crypto.createHash('sha256').update(cleanOtp).digest('hex');
+
+  const query = {
+    passwordResetOtp: hashedOtp,
+    passwordResetOtpExpires: { $gt: Date.now() },
+  };
+
+  if (userId) {
+    query._id = userId;
+  } else if (identifier) {
+    const cleanId = identifier.trim().toLowerCase();
+    query.$or = [{ email: cleanId }, { username: cleanId }];
+  }
+
+  const user = await User.findOne(query);
+  if (!user) {
+    throw ApiError.badRequest('Invalid or expired 6-digit OTP code. Please request a new code.');
+  }
+
+  user.password = newPassword;
+  user.passwordResetOtp = undefined;
+  user.passwordResetOtpExpires = undefined;
+  await user.save();
+
+  return { message: 'Password has been updated successfully. You can now sign in with your new password.' };
+};
+
+export const requestPasswordReset = async (identifier, clientBaseUrl = null) => {
+  // Delegate to sendPasswordOtp to maintain unified OTP functionality
+  return sendPasswordOtp({ identifier });
 };
 
 export const resetUserPassword = async (token, newPassword) => {
@@ -197,6 +247,8 @@ export default {
   generateTokens,
   loginUser,
   changeUserPassword,
+  sendPasswordOtp,
+  verifyPasswordOtp,
   requestPasswordReset,
   resetUserPassword,
   getUserProfile,

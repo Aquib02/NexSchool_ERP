@@ -116,6 +116,86 @@ export const sendPasswordResetEmail = async ({ to, username, resetLink }) => {
   }
 };
 
+/**
+ * Sends a 6-digit OTP verification email for password reset/change.
+ * @param {Object} options
+ * @param {string} options.to - Recipient email address
+ * @param {string} options.username - Recipient username
+ * @param {string} options.otp - 6-digit verification code
+ */
+export const sendPasswordResetOtpEmail = async ({ to, username, otp }) => {
+  try {
+    const mailClient = getTransporter();
+
+    if (!mailClient) {
+      logger.warn('[EmailService] SMTP credentials (EMAIL_USER/EMAIL_PASS) are not configured. Email dispatch skipped.');
+      return { delivered: false, reason: 'unconfigured' };
+    }
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #1e293b; }
+          .container { max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+          .header { background: #4f46e5; padding: 24px 32px; text-align: center; color: #ffffff; }
+          .header h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+          .header p { margin: 4px 0 0; font-size: 12px; opacity: 0.9; }
+          .content { padding: 32px; }
+          .greeting { font-size: 16px; font-weight: 600; color: #0f172a; margin-bottom: 12px; }
+          .text { font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 20px; }
+          .otp-card { text-align: center; margin: 28px 0; background: #f8fafc; border: 2px dashed #6366f1; border-radius: 14px; padding: 20px; }
+          .otp-code { font-size: 36px; font-weight: 800; letter-spacing: 10px; color: #4338ca; font-family: monospace; }
+          .otp-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin-top: 6px; }
+          .security-note { font-size: 12px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 16px; margin-top: 24px; line-height: 1.5; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>NexSchool ERP</h1>
+            <p>Security & Verification Center</p>
+          </div>
+          <div class="content">
+            <div class="greeting">Hello, ${username || 'User'}</div>
+            <p class="text">
+              You requested a verification code to change or reset your password. Use the 6-digit code below to complete verification:
+            </p>
+            <div class="otp-card">
+              <div class="otp-code">${otp}</div>
+              <div class="otp-label">One-Time Verification Code (Valid for 10 minutes)</div>
+            </div>
+            <p class="text" style="font-size: 12px; color: #64748b;">
+              Enter this code on the password reset screen along with your new password.
+            </p>
+            <div class="security-note">
+              <strong>Security Notice:</strong> Never share this OTP with anyone. NexSchool administrators will never ask for your verification code. If you did not make this request, please secure your account immediately.
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const info = await mailClient.sendMail({
+      from: ENV.EMAIL.FROM,
+      to,
+      subject: `Your NexSchool ERP Verification Code: ${otp}`,
+      text: `Hello ${username},\n\nYour 6-digit password verification code is: ${otp}\n\nThis code will expire in 10 minutes. Do not share this code with anyone.`,
+      html: htmlContent,
+    });
+
+    logger.info(`[EmailService] Password reset OTP sent successfully to ${to} (MessageId: ${info.messageId})`);
+    return { delivered: true, messageId: info.messageId };
+  } catch (error) {
+    logger.error('[EmailService] Failed to send password reset OTP:', error.message);
+    return { delivered: false, error: error.message };
+  }
+};
+
 export default {
   sendPasswordResetEmail,
+  sendPasswordResetOtpEmail,
 };

@@ -26,6 +26,21 @@ export const authService = {
     return apiClient.put('/auth/change-password', passwordData);
   },
 
+  sendOtp: async (identifier) => {
+    return apiClient.post('/auth/send-otp', {
+      identifier,
+      email: identifier,
+    });
+  },
+
+  verifyOtp: async ({ identifier, otp, newPassword }) => {
+    return apiClient.post('/auth/verify-otp', {
+      identifier,
+      otp,
+      newPassword,
+    });
+  },
+
   forgotPassword: async (identifier) => {
     return apiClient.post('/auth/forgot-password', {
       email: identifier,

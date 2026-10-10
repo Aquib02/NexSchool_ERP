@@ -46,6 +46,20 @@ export const updateProfile = asyncHandler(async (req, res) => {
   return ApiResponse.ok(res, updatedUser, 'Profile updated successfully');
 });
 
+export const sendPasswordOtp = asyncHandler(async (req, res) => {
+  const identifier = req.body.email || req.body.username || req.body.identifier;
+  const userId = req.user ? req.user._id : null;
+  const result = await authService.sendPasswordOtp({ identifier, userId });
+  return ApiResponse.ok(res, result, result.message);
+});
+
+export const verifyPasswordOtp = asyncHandler(async (req, res) => {
+  const { identifier, otp, newPassword } = req.body;
+  const userId = req.user ? req.user._id : null;
+  const result = await authService.verifyPasswordOtp({ identifier, userId, otp, newPassword });
+  return ApiResponse.ok(res, null, result.message);
+});
+
 export const forgotPassword = asyncHandler(async (req, res) => {
   const identifier = req.body.email || req.body.username || req.body.identifier;
   const clientOrigin = req.headers.origin || null;
