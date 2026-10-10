@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 font-sans antialiased selection:bg-indigo-500 selection:text-white;
+  }
+}
+
+/* Custom scrollbar for modern ERP UI */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Printable Document Isolation (Invoices & Receipts) */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printable-receipt,
+  #printable-receipt *,
+  #printable-invoice,
+  #printable-invoice * {
+    visibility: visible;
+  }
+  #printable-receipt,
+  #printable-invoice {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 24px;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+}

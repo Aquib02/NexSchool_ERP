@@ -1,0 +1,47 @@
+{
+  "name": "school-erp-backend",
+  "version": "1.0.0",
+  "description": "Production-ready School Management ERP Backend",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "seed": "node src/seeders/seedRbac.js",
+    "seed:demo": "node src/seeders/seedDemoUsers.js",
+    "verify:models": "node src/tests/verifyModels.js",
+    "test:auth": "node src/tests/testAuthRbac.js",
+    "test:phase5": "node src/tests/testPhase5.js",
+    "test:phase6": "node src/tests/testPhase6.js",
+    "test:phase7": "node src/tests/testPhase7.js",
+    "test:phase8": "node src/tests/testPhase8.js",
+    "test:phase9": "node src/tests/testPhase9.js",
+    "test:phase10": "node src/tests/testPhase10.js",
+    "test:phase11": "node src/tests/testPhase11.js",
+    "test:search": "node src/tests/testSearch.js"
+  },
+  "keywords": [
+    "school-erp",
+    "mern",
+    "education",
+    "management"
+  ],
+  "author": "Antigravity Engineering",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.3.0",
+    "morgan": "^1.12.1",
+    "nodemon": "^3.1.14"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^11.2.0"
+  }
+}
