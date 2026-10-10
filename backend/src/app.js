@@ -22,20 +22,59 @@ app.use(
 );
 
 // CORS Configuration
+const allowedOrigins = (ENV.CORS_ORIGIN || '')
+  .split(',')
+  .map((o) => o.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, Postman)
-      if (!origin || origin === ENV.CORS_ORIGIN || origin.startsWith('http://localhost:')) {
+      // Allow requests with no origin (like mobile apps, curl, server-to-server)
+      if (!origin) return callback(null, true);
+
+      const normalizedOrigin = origin.replace(/\/+$/, '');
+
+      // Check against explicit CORS_ORIGIN list or wildcard
+      if (allowedOrigins.includes('*') || allowedOrigins.includes(normalizedOrigin)) {
         return callback(null, true);
       }
-      callback(new Error('CORS policy does not allow access from this origin.'));
+
+      // Automatically allow localhost development origins
+      if (
+        normalizedOrigin.startsWith('http://localhost:') ||
+        normalizedOrigin.startsWith('http://127.0.0.1:') ||
+        normalizedOrigin.startsWith('https://localhost:')
+      ) {
+        return callback(null, true);
+      }
+
+      // Automatically allow all Render deployments (*.onrender.com)
+      try {
+        const url = new URL(normalizedOrigin);
+        if (url.hostname.endsWith('.onrender.com')) {
+          return callback(null, true);
+        }
+      } catch (_) {}
+
+      // Cleanly reject unknown origins without throwing unhandled exceptions
+      return callback(null, false);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   })
 );
+
+// Root Health & Deployment Verification Endpoint
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'NexSchool ERP Backend API is online and operational.',
+    health: '/api/health',
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // HTTP Request Logging
 if (ENV.NODE_ENV !== 'test') {
