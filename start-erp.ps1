@@ -5,6 +5,24 @@ Write-Host ""
 
 $baseDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
+if (-not (Test-Path "$baseDir\backend\.env")) {
+    Write-Host "[.env] Creating backend\.env from template..." -ForegroundColor Yellow
+    Copy-Item "$baseDir\backend\.env.example" "$baseDir\backend\.env"
+}
+
+if (-not (Test-Path "$baseDir\backend\node_modules")) {
+    Write-Host "[Backend] Installing packages..." -ForegroundColor Yellow
+    npm --prefix "$baseDir\backend" install
+    Write-Host "[Database] Seeding initial roles and users..." -ForegroundColor Yellow
+    npm --prefix "$baseDir\backend" run seed
+    npm --prefix "$baseDir\backend" run seed:demo
+}
+
+if (-not (Test-Path "$baseDir\frontend\node_modules")) {
+    Write-Host "[Frontend] Installing packages..." -ForegroundColor Yellow
+    npm --prefix "$baseDir\frontend" install
+}
+
 Write-Host "Launching Backend Server on port 5000..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$baseDir\backend'; npm run dev"
 
