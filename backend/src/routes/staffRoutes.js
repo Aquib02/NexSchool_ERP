@@ -6,6 +6,17 @@ const router = Router();
 
 router.use(authenticate);
 
+// Security boundary: Students are strictly blocked from HR & staff records
+router.use((req, res, next) => {
+  if (req.user?.role?.name === 'STUDENT') {
+    return res.status(403).json({
+      success: false,
+      message: 'Students are not authorized to access Staff or Human Resources operations',
+    });
+  }
+  next();
+});
+
 // Departments & Designations
 router.get('/departments', checkPermission('staff:view'), staffController.getDepartments);
 router.post('/departments', checkPermission('staff:create'), staffController.createDepartment);

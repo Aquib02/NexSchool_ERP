@@ -28,7 +28,11 @@ export const LoginPage = () => {
     const result = await login({ username, password });
 
     if (result.success) {
-      navigate(from, { replace: true });
+      if (result.user?.role?.name === 'STUDENT') {
+        navigate('/portal/student', { replace: true });
+      } else {
+        navigate(from, { replace: true });
+      }
     } else {
       setError(result.message || 'Login failed. Please check your credentials.');
       setIsLoading(false);

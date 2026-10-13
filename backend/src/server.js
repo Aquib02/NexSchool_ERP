@@ -27,7 +27,7 @@ const startServer = async () => {
       setTimeout(() => {
         logger.error('Forced shutdown due to timeout.');
         process.exit(1);
-      }, 10000);
+      }, 1000000);
     };
 
     process.on('SIGTERM', () => handleShutdown('SIGTERM'));

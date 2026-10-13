@@ -20,6 +20,11 @@ import noticeRoutes from './noticeRoutes.js';
 import notificationRoutes from './notificationRoutes.js';
 import portalRoutes from './portalRoutes.js';
 import searchRoutes from './searchRoutes.js';
+import communicationRoutes from './communicationRoutes.js';
+import lmsRoutes from './lmsRoutes.js';
+import liveTrackingRoutes from './liveTrackingRoutes.js';
+import certificateRoutes from './certificateRoutes.js';
+import aiAnalyticsRoutes from './aiAnalyticsRoutes.js';
 import ApiResponse from '../utils/ApiResponse.js';
 
 const router = Router();
@@ -60,5 +65,10 @@ router.use('/notices', noticeRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/portal', portalRoutes);
 router.use('/search', searchRoutes);
+router.use('/communication', communicationRoutes);
+router.use('/lms', lmsRoutes);
+router.use('/live-tracking', liveTrackingRoutes);
+router.use('/certificates', certificateRoutes);
+router.use('/ai-analytics', aiAnalyticsRoutes);
 
 export default router;

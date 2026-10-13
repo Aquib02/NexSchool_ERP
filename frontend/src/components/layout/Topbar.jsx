@@ -41,8 +41,13 @@ const QUICK_NAV = [
   { label: 'Medical Room & Clinic', path: '/medical', keywords: 'medical clinic health doctor nurse visit record allergy' },
   { label: 'Security & Campus Gates', path: '/security', keywords: 'security gatepass visitor guard incident pass checkpoint' },
   { label: 'Notices & Circulars', path: '/notices', keywords: 'notice circular bulletin board announcement broadcast' },
-  { label: 'Audit Trail & Logs', path: '/audit', keywords: 'audit logs trail activity security history' },
+  { label: 'Audit Trail & Logs', path: '/audit-logs', keywords: 'audit logs trail activity security history' },
   { label: 'User Roles & Permissions (RBAC)', path: '/rbac', keywords: 'rbac roles permissions access control security users' },
+  { label: 'Communication & PTM Portal', path: '/communication', keywords: 'communication ptm parents meeting chat whatsapp sms broadcast' },
+  { label: 'LMS & E-Learning Portal', path: '/lms', keywords: 'lms elearning courses quizzes test assessment study materials homework' },
+  { label: 'Fleet Live GPS Tracking', path: '/tracking', keywords: 'tracking gps bus fleet live route map boarding telemetry sos' },
+  { label: 'Certificates & ID Generator', path: '/certificates', keywords: 'certificates id cards hall ticket bonafide transfer generator print' },
+  { label: 'AI Predictive Analytics & Copilot', path: '/ai-analytics', keywords: 'ai analytics predictive at-risk retention drop-out copilot lesson planner' },
 ];
 
 export const Topbar = ({ toggleMobileSidebar, onChangePasswordClick }) => {

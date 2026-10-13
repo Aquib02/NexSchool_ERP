@@ -86,6 +86,10 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
+// Static file serving for uploads and educational documents
+app.use('/uploads', express.static('uploads'));
+app.use('/documents', express.static('uploads/documents'));
+
 // Mount API Endpoints
 app.use('/api', apiRoutes);
 

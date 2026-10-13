@@ -51,6 +51,13 @@ import AuditLogsPage from '../pages/audit/AuditLogsPage.jsx';
 import StudentPortalPage from '../pages/portal/StudentPortalPage.jsx';
 import ParentPortalPage from '../pages/portal/ParentPortalPage.jsx';
 
+// Enterprise Extensions: Features 2, 4, 5, 6, 7
+import CommunicationPage from '../pages/communication/CommunicationPage.jsx';
+import LMSPage from '../pages/lms/LMSPage.jsx';
+import LiveTrackingPage from '../pages/tracking/LiveTrackingPage.jsx';
+import CertificatesPage from '../pages/certificates/CertificatesPage.jsx';
+import AIAnalyticsPage from '../pages/analytics/AIAnalyticsPage.jsx';
+
 // Roles & RBAC Management
 import RbacPage from '../pages/rbac/RbacPage.jsx';
 
@@ -275,6 +282,48 @@ export const AppRoutes = () => {
           element={
             <ProtectedRoute>
               <ParentPortalPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Enterprise Extensions: Features 2, 4, 5, 6, 7 */}
+        <Route
+          path="/communication"
+          element={
+            <ProtectedRoute requiredPermission="communication:view">
+              <CommunicationPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/lms"
+          element={
+            <ProtectedRoute requiredPermission="lms:view">
+              <LMSPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tracking"
+          element={
+            <ProtectedRoute requiredPermission="tracking:view">
+              <LiveTrackingPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/certificates"
+          element={
+            <ProtectedRoute requiredPermission="certificates:view">
+              <CertificatesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ai-analytics"
+          element={
+            <ProtectedRoute requiredPermission="analytics:view">
+              <AIAnalyticsPage />
             </ProtectedRoute>
           }
         />

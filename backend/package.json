@@ -9,6 +9,9 @@
     "dev": "nodemon src/server.js",
     "seed": "node src/seeders/seedRbac.js",
     "seed:demo": "node src/seeders/seedDemoUsers.js",
+    "seed:teacher": "node src/seeders/seedTeacherDemoData.js",
+    "seed:pdfs": "node src/seeders/generateDummyPdfs.js",
+    "teacher:workflows": "node src/seeders/executeTeacherLiveWorkflows.js",
     "verify:models": "node src/tests/verifyModels.js",
     "test:auth": "node src/tests/testAuthRbac.js",
     "test:phase5": "node src/tests/testPhase5.js",
@@ -18,6 +21,7 @@
     "test:phase9": "node src/tests/testPhase9.js",
     "test:phase10": "node src/tests/testPhase10.js",
     "test:phase11": "node src/tests/testPhase11.js",
+    "test:teacher": "node src/tests/testTeacherFeatures.js",
     "test:search": "node src/tests/testSearch.js"
   },
   "keywords": [
@@ -40,7 +44,8 @@
     "mongoose": "^9.3.0",
     "morgan": "^1.12.1",
     "nodemailer": "^10.1.0",
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "pdf-parse": "^2.4.5"
   },
   "devDependencies": {
     "mongodb-memory-server": "^11.2.0"
