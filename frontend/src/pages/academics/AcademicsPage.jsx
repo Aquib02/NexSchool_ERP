@@ -29,6 +29,7 @@ import {
   Check,
   Eye,
   Printer,
+  Users,
 } from 'lucide-react';
 import Card from '../../components/common/Card.jsx';
 import Button from '../../components/common/Button.jsx';
@@ -39,6 +40,7 @@ import EmptyState from '../../components/common/EmptyState.jsx';
 import academicsService from '../../services/academicsService.js';
 import adminService from '../../services/adminService.js';
 import { useAuth } from '../../context/AuthContext.jsx';
+import printElement from '../../utils/printUtils.js';
 
 export const AcademicsPage = () => {
   const { user } = useAuth();
@@ -815,8 +817,12 @@ export const AcademicsPage = () => {
     document.body.removeChild(link);
   };
 
+  const handlePrintElement = (elementId, title = 'Document', options = {}) => {
+    printElement(elementId, title, options);
+  };
+
   const handlePrintMarksheet = () => {
-    window.print();
+    handlePrintElement('printable-marksheet', 'Exam_Marksheet_Preview');
   };
 
   // Fetch Consolidated Class Results
@@ -1993,41 +1999,56 @@ export const AcademicsPage = () => {
               {/* Class Overview Metric Cards */}
               {consolidatedData?.classStats && (
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                  <div className="p-3 bg-white border border-slate-200 rounded-xl">
-                    <div className="text-[11px] font-semibold text-slate-500">Total Enrolled</div>
-                    <div className="text-xl font-bold text-slate-800 mt-1">
+                  <div className="p-3 bg-blue-50/80 border border-blue-200/90 rounded-xl shadow-2xs">
+                    <div className="text-[11px] font-bold text-blue-900 flex items-center justify-between">
+                      <span>Total Enrolled</span>
+                      <Users className="w-3.5 h-3.5 text-blue-600" />
+                    </div>
+                    <div className="text-2xl font-black text-blue-950 mt-1 tracking-tight">
                       {consolidatedData.classStats.totalStudents || 0}
                     </div>
-                    <div className="text-[10px] text-slate-400">Students in Class</div>
+                    <div className="text-[10px] text-blue-700 font-medium">Students in Class</div>
                   </div>
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                    <div className="text-[11px] font-semibold text-emerald-800">Passed Students</div>
-                    <div className="text-xl font-bold text-emerald-700 mt-1">
-                      {consolidatedData.classStats.passedStudents || 0}{' '}
-                      <span className="text-xs font-normal">({consolidatedData.classStats.passRate || 0}%)</span>
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl shadow-2xs">
+                    <div className="text-[11px] font-bold text-emerald-900 flex items-center justify-between">
+                      <span>Passed Students</span>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                     </div>
-                    <div className="text-[10px] text-emerald-600 font-medium">Clear in All Subjects</div>
+                    <div className="text-2xl font-black text-emerald-700 mt-1 tracking-tight">
+                      {consolidatedData.classStats.passedStudents || 0}{' '}
+                      <span className="text-xs font-semibold text-emerald-600">({consolidatedData.classStats.passRate || 0}%)</span>
+                    </div>
+                    <div className="text-[10px] text-emerald-700 font-medium">Clear in All Subjects</div>
                   </div>
-                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl">
-                    <div className="text-[11px] font-semibold text-rose-800">Failed / Compartment</div>
-                    <div className="text-xl font-bold text-rose-700 mt-1">
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl shadow-2xs">
+                    <div className="text-[11px] font-bold text-rose-900 flex items-center justify-between">
+                      <span>Failed / Compartment</span>
+                      <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                    </div>
+                    <div className="text-2xl font-black text-rose-700 mt-1 tracking-tight">
                       {consolidatedData.classStats.failedStudents || 0}
                     </div>
-                    <div className="text-[10px] text-rose-600 font-medium">&lt; 40% in Any Subject</div>
+                    <div className="text-[10px] text-rose-700 font-medium">&lt; 40% in Any Subject</div>
                   </div>
-                  <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
-                    <div className="text-[11px] font-semibold text-indigo-800">Class Average</div>
-                    <div className="text-xl font-bold text-indigo-700 mt-1">
+                  <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl shadow-2xs">
+                    <div className="text-[11px] font-bold text-indigo-900 flex items-center justify-between">
+                      <span>Class Average</span>
+                      <TrendingUp className="w-3.5 h-3.5 text-indigo-600" />
+                    </div>
+                    <div className="text-2xl font-black text-indigo-700 mt-1 tracking-tight">
                       {consolidatedData.classStats.classAverage || 0}%
                     </div>
-                    <div className="text-[10px] text-indigo-600 font-medium">Overall Class Performance</div>
+                    <div className="text-[10px] text-indigo-700 font-medium">Overall Class Performance</div>
                   </div>
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                    <div className="text-[11px] font-semibold text-amber-800">Highest Score</div>
-                    <div className="text-xl font-bold text-amber-700 mt-1">
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl shadow-2xs">
+                    <div className="text-[11px] font-bold text-amber-900 flex items-center justify-between">
+                      <span>Highest Score</span>
+                      <Award className="w-3.5 h-3.5 text-amber-600" />
+                    </div>
+                    <div className="text-2xl font-black text-amber-700 mt-1 tracking-tight">
                       {consolidatedData.classStats.highestScore || 0}
                     </div>
-                    <div className="text-[10px] text-amber-600 font-medium">Top Aggregate Score</div>
+                    <div className="text-[10px] text-amber-700 font-medium">Top Aggregate Score</div>
                   </div>
                 </div>
               )}
@@ -2167,13 +2188,13 @@ export const AcademicsPage = () => {
                                 </span>
                               )}
                             </td>
-                            <td className="p-2">
-                              <input
-                                type="text"
+                            <td className="p-2 min-w-[260px]">
+                              <textarea
+                                rows={2}
                                 value={studentReviews[st.student._id] !== undefined ? studentReviews[st.student._id] : (st.teacherRemarks || '')}
                                 onChange={(e) => handleStudentReviewChange(st.student._id, e.target.value)}
                                 placeholder="Enter teacher review & remarks for student..."
-                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-y leading-snug"
                               />
                             </td>
                             <td className="p-3 text-center">
@@ -2775,34 +2796,34 @@ export const AcademicsPage = () => {
 
           {/* Quick Analytics Strip */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center">
-              <div className="text-xs text-slate-500 font-medium">Total Students</div>
-              <div className="text-xl font-bold text-slate-800 mt-0.5">
+            <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl text-center shadow-2xs">
+              <div className="text-xs text-blue-800 font-semibold">Total Students</div>
+              <div className="text-2xl font-black text-blue-950 mt-0.5">
                 {marksheetAnalytics.total}
               </div>
-              <div className="text-[10px] text-slate-400">Enrolled Roster</div>
+              <div className="text-[10px] text-blue-700 font-medium">Enrolled Roster</div>
             </div>
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-center">
-              <div className="text-xs text-emerald-700 font-medium">Passed Students</div>
-              <div className="text-xl font-bold text-emerald-700 mt-0.5">
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-center shadow-2xs">
+              <div className="text-xs text-emerald-800 font-semibold">Passed Students</div>
+              <div className="text-2xl font-black text-emerald-700 mt-0.5">
                 {marksheetAnalytics.passed}{' '}
-                <span className="text-xs font-normal">({marksheetAnalytics.passRate}%)</span>
+                <span className="text-xs font-semibold text-emerald-600">({marksheetAnalytics.passRate}%)</span>
               </div>
-              <div className="text-[10px] text-emerald-600 font-medium">Score ≥ 40%</div>
+              <div className="text-[10px] text-emerald-700 font-medium">Score ≥ 40%</div>
             </div>
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-center">
-              <div className="text-xs text-rose-700 font-medium">Failed Students</div>
-              <div className="text-xl font-bold text-rose-700 mt-0.5">
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-center shadow-2xs">
+              <div className="text-xs text-rose-800 font-semibold">Failed Students</div>
+              <div className="text-2xl font-black text-rose-700 mt-0.5">
                 {marksheetAnalytics.failed}
               </div>
-              <div className="text-[10px] text-rose-600 font-medium">Score &lt; 40%</div>
+              <div className="text-[10px] text-rose-700 font-medium">Score &lt; 40%</div>
             </div>
-            <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-center">
-              <div className="text-xs text-indigo-700 font-medium">Class Average</div>
-              <div className="text-xl font-bold text-indigo-700 mt-0.5">
+            <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-center shadow-2xs">
+              <div className="text-xs text-indigo-800 font-semibold">Class Average</div>
+              <div className="text-2xl font-black text-indigo-700 mt-0.5">
                 {marksheetAnalytics.avgMarks}
               </div>
-              <div className="text-[10px] text-indigo-600 font-medium">
+              <div className="text-[10px] text-indigo-700 font-medium">
                 Highest: {marksheetAnalytics.maxScore} / 100
               </div>
             </div>
@@ -2937,7 +2958,12 @@ export const AcademicsPage = () => {
                 variant="primary"
                 size="sm"
                 icon={Printer}
-                onClick={() => window.print()}
+                onClick={() =>
+                  handlePrintElement(
+                    'printable-student-report',
+                    `ReportCard_${selectedStudentReport?.student?.fullName?.replace(/\s+/g, '_') || 'Student'}`
+                  )
+                }
               >
                 Download / Print Marksheet
               </Button>
@@ -3144,7 +3170,7 @@ export const AcademicsPage = () => {
                 <span className="text-[10px] text-slate-500">Qualitative Assessment</span>
               </div>
               <textarea
-                rows={2}
+                rows={3}
                 value={selectedStudentReport.teacherRemarks || ''}
                 onChange={(e) =>
                   setSelectedStudentReport({
@@ -3153,8 +3179,11 @@ export const AcademicsPage = () => {
                   })
                 }
                 placeholder="Type comprehensive qualitative review for this student..."
-                className="w-full p-2.5 bg-white border border-indigo-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                className="w-full p-2.5 bg-white border border-indigo-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 print:hidden"
               />
+              <div className="hidden print:block text-xs font-semibold text-slate-800 pt-1 whitespace-normal break-words leading-relaxed">
+                "{selectedStudentReport.teacherRemarks || 'Satisfactory academic progress.'}"
+              </div>
             </div>
 
             {/* 5. Principal Remarks & Verification Signatures */}
@@ -3162,7 +3191,7 @@ export const AcademicsPage = () => {
               <span className="text-[10px] text-slate-400 uppercase font-semibold">
                 Principal & Academic Board Remarks:
               </span>
-              <p className="font-semibold text-slate-800 mt-0.5">
+              <p className="font-semibold text-slate-800 mt-0.5 whitespace-normal break-words leading-relaxed">
                 "{selectedStudentReport.principalRemarks}"
               </p>
             </div>
@@ -3194,11 +3223,11 @@ export const AcademicsPage = () => {
         onClose={() => setIsBroadsheetPreviewOpen(false)}
         title="Class Consolidated Result Broadsheet (Master Gazette)"
         subtitle="Complete multi-subject examination master sheet for Class Teacher & Coordinator"
-        maxWidth="max-w-6xl"
+        maxWidth="max-w-7xl"
         footer={
           <div className="w-full flex items-center justify-between">
             <span className="text-xs text-slate-500 font-medium">
-              Official Academic Gazette for {classes.find((c) => c._id === selectedClassId)?.name}
+              Official Academic Gazette for {classes.find((c) => c._id === selectedClassId)?.name} • Standard Landscape Print Layout
             </span>
             <div className="flex items-center gap-2">
               <Button
@@ -3213,9 +3242,9 @@ export const AcademicsPage = () => {
                 variant="primary"
                 size="sm"
                 icon={Printer}
-                onClick={() => window.print()}
+                onClick={() => handlePrintElement('printable-broadsheet', 'Class_Gazette_Broadsheet', { orientation: 'landscape' })}
               >
-                Print Gazette
+                Print Gazette (Landscape)
               </Button>
             </div>
           </div>
@@ -3241,50 +3270,50 @@ export const AcademicsPage = () => {
             </div>
           </div>
 
-          <div className="border border-slate-200 rounded-xl overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
+          <div className="border border-slate-200 rounded-xl overflow-x-auto print:overflow-visible print:border-none">
+            <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px]">
-                  <th className="p-2.5 text-center">Rank</th>
-                  <th className="p-2.5 text-center">Roll #</th>
-                  <th className="p-2.5">Student Full Name</th>
+                  <th className="py-2.5 px-2 text-center w-12 whitespace-nowrap">Rank</th>
+                  <th className="py-2.5 px-2 text-center w-14 whitespace-nowrap">Roll #</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">Student Full Name</th>
                   {consolidatedData.subjects.map((sub) => (
-                    <th key={sub._id} className="p-2.5 text-center">
+                    <th key={sub._id} className="py-2.5 px-2 text-center whitespace-normal max-w-[90px] leading-tight">
                       {sub.name}
                     </th>
                   ))}
-                  <th className="p-2.5 text-center font-black">Grand Total</th>
-                  <th className="p-2.5 text-center font-black">%</th>
-                  <th className="p-2.5 text-center">Grade</th>
-                  <th className="p-2.5 text-center">Result</th>
-                  <th className="p-2.5">Teacher Review</th>
+                  <th className="py-2.5 px-2 text-center font-black whitespace-nowrap">Total</th>
+                  <th className="py-2.5 px-2 text-center font-black w-14 whitespace-nowrap">%</th>
+                  <th className="py-2.5 px-2 text-center w-12 whitespace-nowrap">Grade</th>
+                  <th className="py-2.5 px-2 text-center w-16 whitespace-nowrap">Result</th>
+                  <th className="py-2.5 px-3 text-left whitespace-normal min-w-[200px] w-auto">Teacher Review / Remarks</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-800">
                 {consolidatedData.students.map((st) => (
                   <tr key={st.student._id} className="hover:bg-slate-50">
-                    <td className="p-2.5 text-center font-bold">#{st.classRank}</td>
-                    <td className="p-2.5 text-center font-bold">{st.student.rollNumber}</td>
-                    <td className="p-2.5 font-bold">{st.student.firstName} {st.student.lastName}</td>
+                    <td className="py-2 px-2 text-center font-bold text-slate-700 whitespace-nowrap">#{st.classRank}</td>
+                    <td className="py-2 px-2 text-center font-bold whitespace-nowrap">{st.student.rollNumber}</td>
+                    <td className="py-2 px-3 font-bold whitespace-nowrap">{st.student.firstName} {st.student.lastName}</td>
                     {consolidatedData.subjects.map((sub) => {
                       const sm = st.subjectsMarks[sub._id];
                       return (
-                        <td key={sub._id} className="p-2.5 text-center">
+                        <td key={sub._id} className="py-2 px-2 text-center font-medium">
                           {sm ? (sm.isAbsent ? 'ABS' : sm.marksObtained !== '' ? sm.marksObtained : '—') : '—'}
                         </td>
                       );
                     })}
-                    <td className="p-2.5 text-center font-black text-slate-900 bg-slate-50">
-                      {st.totalMarksObtained} / {st.totalMarksPossible}
+                    <td className="py-2 px-2 text-center font-black text-slate-900 bg-slate-50 whitespace-nowrap">
+                      {st.totalMarksObtained} <span className="text-[10px] text-slate-400 font-normal">/{st.totalMarksPossible}</span>
                     </td>
-                    <td className="p-2.5 text-center font-bold text-indigo-700">{st.percentage}%</td>
-                    <td className="p-2.5 text-center font-bold">{st.overallGrade}</td>
-                    <td className="p-2.5 text-center font-bold">
-                      <span className={st.passStatus === 'PASS' ? 'text-emerald-700' : 'text-rose-700'}>
+                    <td className="py-2 px-2 text-center font-bold text-indigo-700 whitespace-nowrap">{st.percentage}%</td>
+                    <td className="py-2 px-2 text-center font-bold whitespace-nowrap">{st.overallGrade}</td>
+                    <td className="py-2 px-2 text-center font-bold whitespace-nowrap">
+                      <span className={st.passStatus === 'PASS' ? 'text-emerald-700 font-black' : 'text-rose-700 font-black'}>
                         {st.passStatus}
                       </span>
                     </td>
-                    <td className="p-2.5 text-[11px] text-slate-600 max-w-[220px] truncate">
+                    <td className="py-2 px-3 text-[11px] text-slate-700 whitespace-normal break-words leading-relaxed min-w-[200px]">
                       {studentReviews[st.student._id] || st.teacherRemarks || '—'}
                     </td>
                   </tr>

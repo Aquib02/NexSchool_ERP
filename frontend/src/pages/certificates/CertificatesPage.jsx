@@ -15,6 +15,7 @@ import {
 import certificateService from '../../services/certificateService.js';
 import studentService from '../../services/studentService.js';
 import { useAuth } from '../../context/AuthContext.jsx';
+import printElement from '../../utils/printUtils.js';
 
 export const CertificatesPage = () => {
   const { user } = useAuth();
@@ -214,7 +215,15 @@ export const CertificatesPage = () => {
   }, [activeTab, idCardType]);
 
   const handlePrint = () => {
-    window.print();
+    if (activeTab === 'studio') {
+      printElement('printable-certificate', 'Official_Certificate');
+    } else if (activeTab === 'idcards') {
+      printElement('printable-id-cards', 'Student_ID_Cards');
+    } else if (activeTab === 'halltickets') {
+      printElement('printable-hall-tickets', 'Exam_Hall_Tickets');
+    } else {
+      window.print();
+    }
   };
 
   const selectedStudent = students.find((s) => String(s._id) === String(selectedStudentId)) || students[0];

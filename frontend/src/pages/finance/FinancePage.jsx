@@ -36,6 +36,7 @@ import EmptyState from '../../components/common/EmptyState.jsx';
 import financeService from '../../services/financeService.js';
 import adminService from '../../services/adminService.js';
 import studentService from '../../services/studentService.js';
+import printElement from '../../utils/printUtils.js';
 
 export const FinancePage = () => {
   const [searchParams] = useSearchParams();
@@ -1551,7 +1552,7 @@ export const FinancePage = () => {
               </Button>
               <Button
                 variant="primary"
-                onClick={() => window.print()}
+                onClick={() => printElement('printable-receipt', 'Official_Fee_Receipt')}
                 icon={<Printer className="w-4 h-4" />}
               >
                 Print / Save PDF
@@ -1766,7 +1767,7 @@ export const FinancePage = () => {
                 </Button>
                 <Button
                   variant="primary"
-                  onClick={() => window.print()}
+                  onClick={() => printElement('printable-invoice', 'Official_Fee_Invoice')}
                   icon={<Printer className="w-4 h-4" />}
                 >
                   Print / Save PDF
