@@ -8,6 +8,13 @@ import Document from '../models/Document.js';
 
 // ==================== GET STUDENTS (SEARCH, FILTER, PAGINATE) ====================
 export const getStudents = asyncHandler(async (req, res) => {
+  // CRITICAL SECURITY GUARD: Students cannot view the school-wide student directory
+  if (req.user?.role?.name === 'STUDENT') {
+    throw ApiError.forbidden(
+      'Students are not authorized to view the school student directory. Please access your records via the Student Portal.'
+    );
+  }
+
   const {
     page = 1,
     limit = 10,
@@ -73,6 +80,13 @@ export const getStudents = asyncHandler(async (req, res) => {
 
 // ==================== GET SINGLE STUDENT 360 PROFILE ====================
 export const getStudentById = asyncHandler(async (req, res) => {
+  // CRITICAL SECURITY GUARD: Students can ONLY view their own profile
+  if (req.user?.role?.name === 'STUDENT') {
+    if (req.user.studentId && req.user.studentId.toString() !== req.params.id) {
+      throw ApiError.forbidden('Access denied. You are only authorized to access your own student profile.');
+    }
+  }
+
   const student = await Student.findById(req.params.id)
     .populate('classId', 'name code')
     .populate('sectionId', 'name roomNumber')

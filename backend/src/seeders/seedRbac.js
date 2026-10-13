@@ -117,6 +117,33 @@ export const PERMISSIONS_DATA = [
   { resource: 'roles', action: 'view', description: 'View system roles' },
   { resource: 'roles', action: 'create', description: 'Create custom roles' },
   { resource: 'roles', action: 'update', description: 'Assign permissions to roles' },
+
+  // Enterprise Module 2: Communication & PTM
+  { resource: 'communication', action: 'view', description: 'View communications, logs, and PTM slots' },
+  { resource: 'communication', action: 'broadcast', description: 'Broadcast SMS and WhatsApp announcements' },
+  { resource: 'communication', action: 'ptm', description: 'Schedule and manage parent-teacher meetings' },
+  { resource: 'communication', action: 'chat', description: 'Send and receive real-time messages' },
+
+  // Enterprise Module 4: LMS & E-Learning
+  { resource: 'lms', action: 'view', description: 'Access learning materials and quiz portals' },
+  { resource: 'lms', action: 'create', description: 'Create assessments, quizzes, and upload study material' },
+  { resource: 'lms', action: 'grade', description: 'Grade student assignment submissions and assessments' },
+  { resource: 'lms', action: 'manage', description: 'Delete study materials and manage LMS course settings' },
+
+  // Enterprise Module 5: Fleet GPS & Bus Tracking
+  { resource: 'tracking', action: 'view', description: 'View live bus fleet tracking and GPS map' },
+  { resource: 'tracking', action: 'telemetry', description: 'Update bus GPS telemetry and trigger emergency SOS' },
+  { resource: 'tracking', action: 'boarding', description: 'Check in and manage student bus boarding status' },
+
+  // Enterprise Module 6: Certificates & ID Cards
+  { resource: 'certificates', action: 'view', description: 'View certificates and student ID cards' },
+  { resource: 'certificates', action: 'create', description: 'Generate certificates, ID cards, and hall tickets' },
+  { resource: 'certificates', action: 'verify', description: 'Verify official school certificate credentials' },
+  { resource: 'certificates', action: 'print', description: 'Print and export certificates and ID cards' },
+
+  // Enterprise Module 7: AI & Predictive Analytics
+  { resource: 'analytics', action: 'view', description: 'View AI predictive student retention and academic risk reports' },
+  { resource: 'analytics', action: 'copilot', description: 'Access AI Copilot (lesson planner, quiz maker, remark assistant)' },
 ];
 
 export const seedRBAC = async () => {
@@ -184,6 +211,11 @@ export const seedRBAC = async () => {
         'library:view', 'transport:view', 'medical:view', 'it:view',
         'housekeeping:view', 'security:view', 'canteen:view',
         'roles:view',
+        'communication:view', 'communication:broadcast', 'communication:ptm', 'communication:chat',
+        'lms:view', 'lms:create', 'lms:grade', 'lms:manage',
+        'tracking:view', 'tracking:telemetry', 'tracking:boarding',
+        'certificates:view', 'certificates:create', 'certificates:verify', 'certificates:print',
+        'analytics:view', 'analytics:copilot',
       ]),
     },
     {
@@ -201,6 +233,10 @@ export const seedRBAC = async () => {
         'exams:view', 'exams:create', 'exams:update',
         'library:view',
         'it:create',
+        'communication:view', 'communication:ptm', 'communication:chat',
+        'lms:view', 'lms:create', 'lms:grade',
+        'certificates:view', 'certificates:print',
+        'analytics:view', 'analytics:copilot',
       ]),
     },
     {
@@ -224,6 +260,8 @@ export const seedRBAC = async () => {
       permissions: getPermIds([
         'admissions:view', 'admissions:create', 'admissions:update', 'admissions:approve',
         'students:view', 'students:create',
+        'communication:view', 'communication:broadcast',
+        'certificates:view',
       ]),
     },
     {
@@ -258,6 +296,8 @@ export const seedRBAC = async () => {
       permissions: getPermIds([
         'transport:view', 'transport:create', 'transport:update', 'transport:delete',
         'students:view',
+        'tracking:view', 'tracking:telemetry', 'tracking:boarding',
+        'communication:view', 'communication:chat',
       ]),
     },
     {
@@ -323,6 +363,10 @@ export const seedRBAC = async () => {
       permissions: getPermIds([
         'students:view', 'academics:view', 'attendance:view', 'homework:view',
         'exams:view', 'fees:view', 'fees:print', 'transport:view', 'medical:view',
+        'communication:view', 'communication:ptm', 'communication:chat',
+        'tracking:view',
+        'certificates:view', 'certificates:print',
+        'lms:view',
       ]),
     },
     {
@@ -332,8 +376,12 @@ export const seedRBAC = async () => {
       hierarchyLevel: 9,
       isSystem: true,
       permissions: getPermIds([
-        'students:view', 'academics:view', 'attendance:view', 'timetable:view',
-        'homework:view', 'homework:create', 'exams:view', 'library:view',
+        'academics:view', 'attendance:view', 'timetable:view',
+        'homework:view', 'exams:view', 'library:view',
+        'lms:view',
+        'certificates:view', 'certificates:print',
+        'communication:view', 'communication:chat',
+        'tracking:view',
       ]),
     },
   ];

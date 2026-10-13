@@ -1,0 +1,107 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 2093 >>
+stream
+BT
+50 740 Td
+/F2 16 Tf
+0 -28 Td
+(GRADE 10 GENERAL SCIENCE - PHYSICS LABORATORY MANUAL) Tj
+/F1 9 Tf
+0 -14 Td
+(NexSchool Enterprise Education Platform | Academic Session 2025-2026) Tj
+/F1 9 Tf
+0 -14 Td
+(-----------------------------------------------------------------------------------------------------------------) Tj
+/F1 9 Tf
+0 -10 Td
+() Tj
+/F2 12 Tf
+0 -16 Td
+(1. Resource Overview & Safety Protocols) Tj
+/F1 10 Tf
+0 -14 Td
+(Subject: General Science \(Physics Mechanics Module\) | Resource Type: Syllabus Lab Manual) Tj
+/F1 10 Tf
+0 -14 Td
+(Published by: Sarah Jenkins, Senior Academic Faculty | Academic Session: 2025-2026) Tj
+/F1 10 Tf
+0 -14 Td
+(Syllabus Coverage: Dynamics, Kinematics, Friction, and Free Body Force Analysis) Tj
+/F1 9 Tf
+0 -10 Td
+() Tj
+/F2 12 Tf
+0 -16 Td
+(2. Experiment 1: Verification of Newton Second Law \(F = ma\)) Tj
+/F1 10 Tf
+0 -14 Td
+(Apparatus: Low-friction air track, glider, hanging weight carrier, photogates, digital timer.) Tj
+/F1 10 Tf
+0 -14 Td
+(Theory: Newton second law states that net force equals mass multiplied by acceleration.) Tj
+/F1 10 Tf
+0 -14 Td
+(Procedure: Vary hanging mass m_h while keeping total system mass constant. Measure acceleration) Tj
+/F1 10 Tf
+0 -14 Td
+(using dual infrared photogates across 0.50m and 1.00m distance markers.) Tj
+/F1 10 Tf
+0 -14 Td
+(Analysis: Plot Net Force vs Acceleration. The slope represents experimental system mass.) Tj
+/F1 9 Tf
+0 -10 Td
+() Tj
+/F2 12 Tf
+0 -16 Td
+(3. Experiment 2: Measurement of Friction Coefficients on an Inclined Plane) Tj
+/F1 10 Tf
+0 -14 Td
+(Apparatus: Adjustable wooden inclined track, protractor, friction block, spring balance.) Tj
+/F1 10 Tf
+0 -14 Td
+(Theory: Static friction coefficient mu_s = tan\(theta_c\), where theta_c is the angle of impending motion.) Tj
+/F1 10 Tf
+0 -14 Td
+(Calculations: Record 5 trials of critical slipping angle. Compute mean angle and standard error.) Tj
+/F1 9 Tf
+0 -20 Td
+() Tj
+/F1 8 Tf
+0 -12 Td
+(Generated electronically via NexSchool ERP Teacher Portal on Monday, October 12, 2026) Tj
+/F1 8 Tf
+0 -10 Td
+(Document Verification Hash: SEC-DOC-ICJTFUVC) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000002396 00000 n 
+0000002466 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+2541
+%%EOF

@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
+import { Link, Navigate } from 'react-router-dom';
 import {
   Users,
   CreditCard,
@@ -14,6 +15,24 @@ import {
   ArrowUpRight,
   Shield,
   Clock,
+  GraduationCap,
+  Award,
+  Radio,
+  MessageSquare,
+  Megaphone,
+  Home,
+  UserCircle,
+  Stethoscope,
+  UtensilsCrossed,
+  ShieldCheck,
+  Sparkles,
+  Settings,
+  Brain,
+  FileText,
+  School,
+  ArrowRight,
+  Search,
+  Layers,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import Card from '../../components/common/Card.jsx';
@@ -32,8 +51,293 @@ import {
 } from 'recharts';
 
 export const DashboardPage = () => {
-  const { user } = useAuth();
+  const { user, hasPermission, hasRole } = useAuth();
   const roleName = user?.role?.name || 'USER';
+
+  // Strict isolation: Students navigate directly to their dedicated self-service portal
+  if (roleName === 'STUDENT') {
+    return <Navigate to="/portal/student" replace />;
+  }
+
+  // State for modules directory filtering
+  const [selectedFilter, setSelectedFilter] = useState('ALL');
+  const [moduleSearch, setModuleSearch] = useState('');
+
+  // Structured Module & Sub-Module Catalog
+  const moduleHub = useMemo(() => [
+    {
+      id: 'academics',
+      title: 'Academic & Learning',
+      category: 'ACADEMICS',
+      icon: GraduationCap,
+      accent: 'from-indigo-600 to-blue-600',
+      badgeBg: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+      description: 'Curriculum design, digital learning, and certifications',
+      subModules: [
+        {
+          name: 'Academics & Timetable',
+          path: '/academics',
+          icon: BookOpen,
+          description: 'Class setup, subject allocations & timetable rosters',
+          show: hasPermission('academics:view'),
+        },
+        {
+          name: 'LMS & E-Learning',
+          path: '/lms',
+          icon: Laptop,
+          description: 'Homework submissions, CBT quizzes & study vault',
+          show: hasPermission('lms:view'),
+        },
+        {
+          name: 'Certificates & ID Cards',
+          path: '/certificates',
+          icon: Award,
+          description: 'Transfer, bonafide certs, student IDs & hall tickets',
+          show: hasPermission('certificates:view'),
+        },
+      ],
+    },
+    {
+      id: 'students',
+      title: 'Students & Admissions',
+      category: 'STUDENTS',
+      icon: Users,
+      accent: 'from-blue-600 to-cyan-600',
+      badgeBg: 'bg-blue-50 text-blue-700 border-blue-200',
+      description: 'Lifecycle from initial inquiry to student graduation',
+      subModules: [
+        {
+          name: 'Admissions Pipeline',
+          path: '/admissions',
+          icon: FileCheck,
+          description: 'Candidate inquiries, entrance marks & enrollment',
+          show: hasPermission('admissions:view'),
+        },
+        {
+          name: 'Students Directory',
+          path: '/students',
+          icon: Users,
+          description: '360 student profiles, family records & documents',
+          show: hasPermission('students:view'),
+        },
+        {
+          name: 'Student Portal',
+          path: '/portal/student',
+          icon: UserCircle,
+          description: 'Dedicated student portal for timetable and homework',
+          show: true,
+        },
+      ],
+    },
+    {
+      id: 'transport',
+      title: 'Transport & Fleet',
+      category: 'OPERATIONS',
+      icon: Bus,
+      accent: 'from-amber-500 to-orange-600',
+      badgeBg: 'bg-amber-50 text-amber-700 border-amber-200',
+      description: 'Bus route logistics, telematics & live student transit safety',
+      subModules: [
+        {
+          name: 'Transport Logistics',
+          path: '/transport',
+          icon: Bus,
+          description: 'Vehicle fleet inventory, routes & stop allocations',
+          show: hasPermission('transport:view'),
+        },
+        {
+          name: 'Fleet Live GPS Tracking',
+          path: '/tracking',
+          icon: Radio,
+          description: 'Live bus telemetry, boarding checklist & panic SOS',
+          show: hasPermission('tracking:view'),
+        },
+      ],
+    },
+    {
+      id: 'communication',
+      title: 'Communication & Community',
+      category: 'COMMUNICATION',
+      icon: MessageSquare,
+      accent: 'from-violet-600 to-purple-600',
+      badgeBg: 'bg-purple-50 text-purple-700 border-purple-200',
+      description: 'Multi-channel parent-teacher engagement and circulars',
+      subModules: [
+        {
+          name: 'Communication & PTM',
+          path: '/communication',
+          icon: MessageSquare,
+          description: 'WhatsApp & SMS broadcasts, PTM bookings & chat',
+          show: hasPermission('communication:view'),
+        },
+        {
+          name: 'Campus Circulars',
+          path: '/notices',
+          icon: Megaphone,
+          description: 'Digital campus bulletins, official notices & announcements',
+          show: true,
+        },
+        {
+          name: 'Parent Portal',
+          path: '/portal/parent',
+          icon: Home,
+          description: 'Dedicated guardian dashboard for attendance & fees',
+          show: true,
+        },
+      ],
+    },
+    {
+      id: 'finance_hr',
+      title: 'Finance & Human Resources',
+      category: 'FINANCE',
+      icon: CreditCard,
+      accent: 'from-emerald-600 to-teal-600',
+      badgeBg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      description: 'Fee collection registries, expenses & faculty management',
+      subModules: [
+        {
+          name: 'Accounts & Fee Collection',
+          path: '/finance',
+          icon: CreditCard,
+          description: 'Fee structures, receipts, ledgers & outstanding dues',
+          show: hasPermission('fees:view'),
+        },
+        {
+          name: 'Staff & Faculty Directory',
+          path: '/staff',
+          icon: UserCheck,
+          description: 'Employee records, department staffing & leave tracking',
+          show: hasPermission('staff:view'),
+        },
+      ],
+    },
+    {
+      id: 'operations',
+      title: 'Campus Facilities & Operations',
+      category: 'OPERATIONS',
+      icon: School,
+      accent: 'from-slate-700 to-slate-900',
+      badgeBg: 'bg-slate-100 text-slate-700 border-slate-300',
+      description: 'Clinic, library, cafeteria, security gate, hygiene & IT',
+      subModules: [
+        {
+          name: 'Library Vault',
+          path: '/library',
+          icon: BookOpen,
+          description: 'Book catalog, circulation loans, returns & late fines',
+          show: hasPermission('library:view'),
+        },
+        {
+          name: 'Medical Clinic',
+          path: '/medical',
+          icon: Stethoscope,
+          description: 'Student medical history, clinic visits & dispensary',
+          show: hasPermission('medical:view'),
+        },
+        {
+          name: 'Canteen & Cafeteria',
+          path: '/canteen',
+          icon: UtensilsCrossed,
+          description: 'Meal menu, inventory & point-of-sale transactions',
+          show: hasPermission('canteen:view'),
+        },
+        {
+          name: 'Security & Campus Gate',
+          path: '/security',
+          icon: ShieldCheck,
+          description: 'Visitor passes, gate logs & security incident records',
+          show: hasPermission('security:view'),
+        },
+        {
+          name: 'Housekeeping & Hygiene',
+          path: '/housekeeping',
+          icon: Sparkles,
+          description: 'Sanitation checklists, cleaning rosters & janitorial stock',
+          show: hasPermission('housekeeping:view'),
+        },
+        {
+          name: 'IT Assets & Helpdesk',
+          path: '/it',
+          icon: Laptop,
+          description: 'Hardware equipment inventory & technical helpdesk tickets',
+          show: hasPermission('it:view'),
+        },
+      ],
+    },
+    {
+      id: 'administration',
+      title: 'Administration, Security & AI',
+      category: 'ADMIN',
+      icon: Shield,
+      accent: 'from-rose-600 to-red-700',
+      badgeBg: 'bg-rose-50 text-rose-700 border-rose-200',
+      description: 'System setup, granular RBAC, AI intelligence & audit log',
+      subModules: [
+        {
+          name: 'Institution Setup',
+          path: '/admin',
+          icon: Settings,
+          description: 'Academic sessions, departments & global configurations',
+          show: hasRole(['SUPER_ADMIN', 'PRINCIPAL', 'ADMINISTRATOR']),
+        },
+        {
+          name: 'Roles & RBAC Matrix',
+          path: '/rbac',
+          icon: Shield,
+          description: 'Configure security roles & granular permissions matrix',
+          show: hasRole(['SUPER_ADMIN', 'ADMINISTRATOR']),
+        },
+        {
+          name: 'AI Analytics & Copilot',
+          path: '/ai-analytics',
+          icon: Brain,
+          description: 'Predictive dropout retention & AI copilot lesson planner',
+          show: hasPermission('analytics:view'),
+        },
+        {
+          name: 'System Audit Logs',
+          path: '/audit-logs',
+          icon: FileText,
+          description: 'Complete security event trail & compliance history',
+          show: hasRole(['SUPER_ADMIN', 'PRINCIPAL']) || hasPermission('audit:view'),
+        },
+      ],
+    },
+  ], [hasPermission, hasRole]);
+
+  // Filter modules based on category and search query
+  const filteredModuleHub = useMemo(() => {
+    return moduleHub
+      .map((mod) => {
+        const permittedSubs = mod.subModules.filter((s) => s.show !== false);
+        if (permittedSubs.length === 0) return null;
+
+        // Category filter
+        if (selectedFilter !== 'ALL' && mod.category !== selectedFilter) {
+          return null;
+        }
+
+        // Search filter
+        if (moduleSearch.trim()) {
+          const q = moduleSearch.toLowerCase();
+          const matchesTitle = mod.title.toLowerCase().includes(q);
+          const matchingSubs = permittedSubs.filter(
+            (s) => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q)
+          );
+          if (!matchesTitle && matchingSubs.length === 0) return null;
+          return {
+            ...mod,
+            subModules: matchingSubs.length > 0 ? matchingSubs : permittedSubs,
+          };
+        }
+
+        return {
+          ...mod,
+          subModules: permittedSubs,
+        };
+      })
+      .filter(Boolean);
+  }, [moduleHub, selectedFilter, moduleSearch]);
 
   // Demo analytics data for ERP dashboard
   const collectionData = [
@@ -55,7 +359,7 @@ export const DashboardPage = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7 pb-10">
       {/* Welcome Banner */}
       <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
         <div className="relative z-10">
@@ -146,8 +450,132 @@ export const DashboardPage = () => {
         </div>
       </div>
 
+      {/* ========================================================================= */}
+      {/* CORE MODULES & SUB-MODULES DIRECTORY (ORGANIZED & GROUPED)               */}
+      {/* ========================================================================= */}
+      <div className="space-y-4 pt-2">
+        {/* Header & Filter Controls */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse" />
+              <h2 className="text-lg font-bold text-slate-900">ERP Modules & Sub-Modules Directory</h2>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Features are logically categorized into Parent Modules and associated Sub-Modules.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Search Input */}
+            <div className="relative min-w-[200px]">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={moduleSearch}
+                onChange={(e) => setModuleSearch(e.target.value)}
+                placeholder="Search sub-modules..."
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              />
+            </div>
+
+            {/* Filter Pills */}
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+              {[
+                { id: 'ALL', label: 'All' },
+                { id: 'ACADEMICS', label: 'Academics' },
+                { id: 'STUDENTS', label: 'Students' },
+                { id: 'COMMUNICATION', label: 'Comms' },
+                { id: 'OPERATIONS', label: 'Operations' },
+                { id: 'ADMIN', label: 'Admin' },
+              ].map((pill) => (
+                <button
+                  key={pill.id}
+                  onClick={() => setSelectedFilter(pill.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                    selectedFilter === pill.id
+                      ? 'bg-white text-indigo-700 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {pill.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Grouped Modules Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredModuleHub.map((parentMod) => {
+            const ParentIcon = parentMod.icon;
+
+            return (
+              <div
+                key={parentMod.id}
+                className="bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:border-indigo-300/80 transition-all overflow-hidden flex flex-col justify-between"
+              >
+                {/* Parent Module Header */}
+                <div>
+                  <div className={`p-4 bg-gradient-to-r ${parentMod.accent} text-white flex items-center justify-between`}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0">
+                        <ParentIcon className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold tracking-tight text-white">{parentMod.title}</h3>
+                        <p className="text-[11px] text-white/80 line-clamp-1 mt-0.5">{parentMod.description}</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold bg-white/20 px-2 py-0.5 rounded-full text-white shrink-0">
+                      {parentMod.subModules.length} Sub-Modules
+                    </span>
+                  </div>
+
+                  {/* Associated Sub-Modules List */}
+                  <div className="p-3 divide-y divide-slate-100">
+                    {parentMod.subModules.map((sub) => {
+                      const SubIcon = sub.icon;
+
+                      return (
+                        <Link
+                          key={sub.path}
+                          to={sub.path}
+                          className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-slate-50 transition-colors group"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600 flex items-center justify-center shrink-0 mt-0.5 transition-colors">
+                            <SubIcon className="w-4 h-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-1">
+                              <p className="text-xs font-semibold text-slate-800 group-hover:text-indigo-600 transition-colors truncate">
+                                {sub.name}
+                              </p>
+                              <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all shrink-0" />
+                            </div>
+                            <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
+                              {sub.description}
+                            </p>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Footer hint */}
+                <div className="px-4 py-2 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                  <span>Category: {parentMod.category}</span>
+                  <span className="font-medium text-indigo-600">Explore &rarr;</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Analytics Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2">
         {/* Chart 1: Fee Collection Trends */}
         <Card
           title="Revenue & Fee Collection Register"

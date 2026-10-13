@@ -8,7 +8,12 @@ router.use(authenticate);
 
 router.get('/', checkPermission('students:view'), studentController.getStudents);
 router.get('/export', checkPermission('students:export'), studentController.exportStudents);
-router.get('/:id', checkPermission('students:view'), studentController.getStudentById);
+router.get('/:id', (req, res, next) => {
+  if (req.user?.role?.name === 'STUDENT' && req.user?.studentId?.toString() === req.params.id) {
+    return next();
+  }
+  return checkPermission('students:view')(req, res, next);
+}, studentController.getStudentById);
 
 router.post('/', checkPermission('students:create'), studentController.createStudent);
 router.put('/:id', checkPermission('students:update'), studentController.updateStudent);

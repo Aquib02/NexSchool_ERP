@@ -46,6 +46,17 @@ import CanteenItem from './CanteenItem.js';
 import CanteenTransaction from './CanteenTransaction.js';
 import Notification from './Notification.js';
 import AuditLog from './AuditLog.js';
+import CommunicationLog from './CommunicationLog.js';
+import PTMSlot from './PTMSlot.js';
+import ChatMessage from './ChatMessage.js';
+import AssignmentSubmission from './AssignmentSubmission.js';
+import Quiz from './Quiz.js';
+import QuizAttempt from './QuizAttempt.js';
+import StudyMaterial from './StudyMaterial.js';
+import BusLiveLocation from './BusLiveLocation.js';
+import BusBoardingLog from './BusBoardingLog.js';
+import Certificate from './Certificate.js';
+import AtRiskStudent from './AtRiskStudent.js';
 
 export {
   Permission,
@@ -96,6 +107,17 @@ export {
   CanteenTransaction,
   Notification,
   AuditLog,
+  CommunicationLog,
+  PTMSlot,
+  ChatMessage,
+  AssignmentSubmission,
+  Quiz,
+  QuizAttempt,
+  StudyMaterial,
+  BusLiveLocation,
+  BusBoardingLog,
+  Certificate,
+  AtRiskStudent,
 };
 
 export default {
@@ -147,4 +169,15 @@ export default {
   CanteenTransaction,
   Notification,
   AuditLog,
+  CommunicationLog,
+  PTMSlot,
+  ChatMessage,
+  AssignmentSubmission,
+  Quiz,
+  QuizAttempt,
+  StudyMaterial,
+  BusLiveLocation,
+  BusBoardingLog,
+  Certificate,
+  AtRiskStudent,
 };

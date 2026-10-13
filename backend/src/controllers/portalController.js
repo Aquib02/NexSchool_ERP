@@ -13,9 +13,21 @@ const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'F
 
 // Helper to resolve student target (logged-in student, or admin/parent request)
 const resolveTargetStudent = async (req) => {
+  // STRICT DATA ISOLATION: If logged-in user is a student, strictly force their own student record
+  if (req.user?.role?.name === 'STUDENT') {
+    if (!req.user?.studentId) {
+      return null;
+    }
+    return await Student.findById(req.user.studentId)
+      .populate('classId', 'name code')
+      .populate('sectionId', 'name')
+      .populate('academicSessionId', 'name')
+      .populate('parentId', 'fatherName motherName primaryContactNumber');
+  }
+
   const { studentId } = req.query;
 
-  // 1. If studentId explicitly provided and requester is allowed
+  // 1. If studentId explicitly provided and requester is staff/admin
   if (studentId && mongoose.Types.ObjectId.isValid(studentId)) {
     return await Student.findById(studentId)
       .populate('classId', 'name code')
@@ -24,7 +36,7 @@ const resolveTargetStudent = async (req) => {
       .populate('parentId', 'fatherName motherName primaryContactNumber');
   }
 
-  // 2. If logged-in user is a student
+  // 2. If logged-in user has studentId (e.g. parent linked or other)
   if (req.user?.studentId) {
     return await Student.findById(req.user.studentId)
       .populate('classId', 'name code')
@@ -33,7 +45,7 @@ const resolveTargetStudent = async (req) => {
       .populate('parentId', 'fatherName motherName primaryContactNumber');
   }
 
-  // 3. Fallback: first student in database for easy preview
+  // 3. Fallback: first student in database for easy preview (Admin/Staff only)
   return await Student.findOne({ status: 'Active' })
     .populate('classId', 'name code')
     .populate('sectionId', 'name')
@@ -156,6 +168,13 @@ export const getStudentPortalData = async (req, res, next) => {
 
 export const getParentPortalData = async (req, res, next) => {
   try {
+    if (req.user?.role?.name === 'STUDENT') {
+      return res.status(403).json({
+        success: false,
+        message: 'Students are not authorized to access the Parent Portal',
+      });
+    }
+
     const { parentId, childId } = req.query;
 
     let parent = null;

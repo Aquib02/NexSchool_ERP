@@ -1,0 +1,125 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 2562 >>
+stream
+BT
+50 740 Td
+/F2 16 Tf
+0 -28 Td
+(GRADE 10 MATHEMATICS - HOMEWORK WORKSHEET) Tj
+/F1 9 Tf
+0 -14 Td
+(NexSchool Enterprise Education Platform | Academic Session 2025-2026) Tj
+/F1 9 Tf
+0 -14 Td
+(-----------------------------------------------------------------------------------------------------------------) Tj
+/F1 9 Tf
+0 -10 Td
+() Tj
+/F2 12 Tf
+0 -16 Td
+(1. Course & Assignment Metadata) Tj
+/F1 10 Tf
+0 -14 Td
+(Course: Mathematics \(Core\) | Course Code: MTH-101 | Academic Year: 2025-2026) Tj
+/F1 10 Tf
+0 -14 Td
+(Faculty / Instructor: Sarah Jenkins \(Senior Mathematics Faculty\)) Tj
+/F1 10 Tf
+0 -14 Td
+(Target Class: Grade 10 - Section A | Total Marks: 50 | Due Date: October 25, 2026) Tj
+/F1 10 Tf
+0 -14 Td
+(Topic: Unit 4 - Quadratic Equations, Polynomial Discriminants & Graph Vertex Analysis) Tj
+/F1 9 Tf
+0 -10 Td
+() Tj
+/F2 12 Tf
+0 -16 Td
+(2. General Instructions for Students) Tj
+/F1 10 Tf
+0 -14 Td
+(- Answer all questions in neat handwriting with complete step-by-step mathematical proofs.) Tj
+/F1 10 Tf
+0 -14 Td
+(- Identify the roots using factoring where possible, or use the quadratic formula x = \(-b +/- sqrt\(D\)\)/\(2a\).) Tj
+/F1 10 Tf
+0 -14 Td
+(- Upload your completed homework as a PDF via the Student LMS Portal before 11:59 PM.) Tj
+/F1 9 Tf
+0 -10 Td
+() Tj
+/F2 12 Tf
+0 -16 Td
+(3. Section A: Algebraic Derivations \(20 Marks\)) Tj
+/F1 10 Tf
+0 -14 Td
+(Q1. Solve for x: 3x^2 - 14x + 8 = 0. State whether the roots are rational, irrational, or complex.) Tj
+/F1 10 Tf
+0 -14 Td
+(Q2. Find the discriminant D = b^2 - 4ac for the equation 2x^2 - 6x + 5 = 0 and interpret the nature of roots.) Tj
+/F1 10 Tf
+0 -14 Td
+(Q3. If alpha and beta are roots of x^2 - 7x + 12 = 0, evaluate alpha^2 + beta^2 and 1/alpha + 1/beta.) Tj
+/F1 9 Tf
+0 -10 Td
+() Tj
+/F2 12 Tf
+0 -16 Td
+(4. Section B: Real-World Modeling Problems \(30 Marks\)) Tj
+/F1 10 Tf
+0 -14 Td
+(Q4. A model rocket is fired vertically with initial height h\(t\) = -5t^2 + 40t + 10 meters.) Tj
+/F1 10 Tf
+0 -14 Td
+(    \(a\) Find the maximum height reached by the rocket using the vertex formula.) Tj
+/F1 10 Tf
+0 -14 Td
+(    \(b\) Determine the exact time in seconds when the projectile impacts the ground.) Tj
+/F1 10 Tf
+0 -14 Td
+(Q5. The length of a rectangular sports lawn exceeds its width by 6 meters. If its area is 216 sq meters,) Tj
+/F1 10 Tf
+0 -14 Td
+(    find the dimensions of the perimeter.) Tj
+/F1 9 Tf
+0 -20 Td
+() Tj
+/F1 8 Tf
+0 -12 Td
+(Generated electronically via NexSchool ERP Teacher Portal on Monday, October 12, 2026) Tj
+/F1 8 Tf
+0 -10 Td
+(Document Verification Hash: SEC-DOC-1CTBE30J) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000002865 00000 n 
+0000002935 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+3010
+%%EOF
