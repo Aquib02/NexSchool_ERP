@@ -37,8 +37,10 @@ export const getAuditLogs = async (req, res, next) => {
       const searchRegex = { $regex: search, $options: 'i' };
       query.$or = [
         { actorName: searchRegex },
+        { actorEmail: searchRegex },
         { action: searchRegex },
         { resource: searchRegex },
+        { description: searchRegex },
         { ipAddress: searchRegex },
       ];
     }

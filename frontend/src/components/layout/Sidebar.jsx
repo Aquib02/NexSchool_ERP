@@ -246,7 +246,7 @@ export const Sidebar = ({ isOpen, isCollapsed, toggleCollapse, closeMobileSideba
           name: 'System Audit Logs',
           path: '/audit-logs',
           icon: FileText,
-          show: hasRole(['SUPER_ADMIN', 'PRINCIPAL']) || hasPermission('audit:view'),
+          show: hasRole(['SUPER_ADMIN', 'ADMIN', 'PRINCIPAL']) || hasPermission('audit:view'),
         },
       ],
     },

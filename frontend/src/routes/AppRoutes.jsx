@@ -261,7 +261,7 @@ export const AppRoutes = () => {
         <Route
           path="/audit-logs"
           element={
-            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'PRINCIPAL']}>
+            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'PRINCIPAL']}>
               <AuditLogsPage />
             </ProtectedRoute>
           }

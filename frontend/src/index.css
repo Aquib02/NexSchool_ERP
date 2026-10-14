@@ -151,7 +151,8 @@
     background: #ffffff !important;
   }
 
-  #printable-broadsheet {
+  #printable-broadsheet,
+  #printable-audit-trail {
     display: block !important;
     width: 100% !important;
     max-width: 100% !important;
@@ -160,23 +161,28 @@
     box-sizing: border-box !important;
   }
 
-  #printable-broadsheet > div {
+  #printable-broadsheet > div,
+  #printable-audit-trail > div {
     overflow: visible !important;
   }
 
-  #printable-broadsheet .overflow-x-auto {
+  #printable-broadsheet .overflow-x-auto,
+  #printable-audit-trail .overflow-x-auto {
     overflow: visible !important;
     border-color: #cbd5e1 !important;
   }
 
-  #printable-broadsheet table {
+  #printable-broadsheet table,
+  #printable-audit-trail table {
     width: 100% !important;
     table-layout: auto !important;
     border-collapse: collapse !important;
   }
 
   #printable-broadsheet th,
-  #printable-broadsheet td {
+  #printable-broadsheet td,
+  #printable-audit-trail th,
+  #printable-audit-trail td {
     overflow: visible !important;
     word-break: normal !important;
     overflow-wrap: break-word !important;

@@ -299,7 +299,7 @@ export const DashboardPage = () => {
           path: '/audit-logs',
           icon: FileText,
           description: 'Complete security event trail & compliance history',
-          show: hasRole(['SUPER_ADMIN', 'PRINCIPAL']) || hasPermission('audit:view'),
+          show: hasRole(['SUPER_ADMIN', 'ADMIN', 'PRINCIPAL']) || hasPermission('audit:view'),
         },
       ],
     },

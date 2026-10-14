@@ -41,34 +41,249 @@ export const updateSession = asyncHandler(async (req, res) => {
   return ApiResponse.ok(res, session, 'Academic session updated successfully');
 });
 
+// ==================== TEACHERS / FACULTY ====================
+export const getTeachers = asyncHandler(async (req, res) => {
+  const teachers = await Employee.find({ status: 'Active' })
+    .select('_id firstName lastName employeeId email phone designationId departmentId')
+    .sort({ firstName: 1 });
+  return ApiResponse.ok(res, teachers, 'Active faculty retrieved successfully');
+});
+
 // ==================== CLASSES ====================
 export const getClasses = asyncHandler(async (req, res) => {
-  const classes = await SchoolClass.find().sort({ numericOrder: 1 });
+  const classes = await SchoolClass.find()
+    .populate('classTeacherId', 'firstName lastName employeeId email phone')
+    .sort({ numericOrder: 1 });
   return ApiResponse.ok(res, classes, 'Classes retrieved successfully');
 });
 
+export const getComprehensiveClassDetails = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const schoolClass = await SchoolClass.findById(id)
+    .populate('classTeacherId', 'firstName lastName employeeId email phone');
+  if (!schoolClass) throw ApiError.notFound('Class not found');
+
+  const [sections, subjects, totalStudents] = await Promise.all([
+    Section.find({ classId: id })
+      .populate('classTeacherId', 'firstName lastName employeeId email phone')
+      .sort({ name: 1 }),
+    Subject.find({ classId: id })
+      .populate('assignedTeacherIds', 'firstName lastName employeeId email phone')
+      .sort({ name: 1 }),
+    Student.countDocuments({ currentClass: id, status: 'Active' }),
+  ]);
+
+  return ApiResponse.ok(
+    res,
+    {
+      schoolClass,
+      sections,
+      subjects,
+      books: schoolClass.books || [],
+      totalStudents,
+    },
+    'Comprehensive class details retrieved successfully'
+  );
+});
+
 export const createClass = asyncHandler(async (req, res) => {
-  const { name, code, numericOrder, description } = req.body;
-  const existing = await SchoolClass.findOne({ $or: [{ name }, { code: code.toUpperCase() }] });
+  const {
+    name,
+    code,
+    numericOrder,
+    description,
+    floorNumber,
+    building,
+    roomNumber,
+    classTeacherId,
+    books,
+    sections,
+    subjects,
+  } = req.body;
+
+  const existing = await SchoolClass.findOne({
+    $or: [{ name: name?.trim() }, { code: code?.trim().toUpperCase() }],
+  });
   if (existing) throw ApiError.conflict('Class with this name or code already exists.');
 
   const newClass = await SchoolClass.create({
-    name,
-    code: code.toUpperCase(),
+    name: name?.trim(),
+    code: code?.trim().toUpperCase(),
     numericOrder,
     description,
+    floorNumber: floorNumber || '',
+    building: building || '',
+    roomNumber: roomNumber || '',
+    classTeacherId: classTeacherId || null,
+    books: Array.isArray(books) ? books : [],
   });
 
-  return ApiResponse.created(res, newClass, 'Class created successfully');
+  // If sections provided during class creation, create them
+  if (Array.isArray(sections) && sections.length > 0) {
+    for (const sec of sections) {
+      if (sec.name) {
+        await Section.create({
+          name: sec.name.trim().toUpperCase(),
+          classId: newClass._id,
+          capacity: sec.capacity || 40,
+          classTeacherId: sec.classTeacherId || null,
+          roomNumber: sec.roomNumber || '',
+        });
+      }
+    }
+  }
+
+  // If subjects provided during class creation, create them
+  if (Array.isArray(subjects) && subjects.length > 0) {
+    for (const sub of subjects) {
+      if (sub.name && sub.code) {
+        await Subject.create({
+          name: sub.name.trim(),
+          code: sub.code.trim().toUpperCase(),
+          type: sub.type || 'Core',
+          classId: newClass._id,
+          totalMarks: sub.totalMarks || 100,
+          passMarks: sub.passMarks || 40,
+          assignedTeacherIds: Array.isArray(sub.assignedTeacherIds)
+            ? sub.assignedTeacherIds
+            : sub.assignedTeacherId
+            ? [sub.assignedTeacherId]
+            : [],
+        });
+      }
+    }
+  }
+
+  const populatedClass = await SchoolClass.findById(newClass._id)
+    .populate('classTeacherId', 'firstName lastName employeeId email phone');
+
+  return ApiResponse.created(res, populatedClass, 'Class created successfully');
 });
 
 export const updateClass = asyncHandler(async (req, res) => {
-  const updated = await SchoolClass.findByIdAndUpdate(req.params.id, req.body, {
+  const {
+    name,
+    code,
+    numericOrder,
+    description,
+    floorNumber,
+    building,
+    roomNumber,
+    classTeacherId,
+    books,
+    sections,
+    subjects,
+    deletedSectionIds,
+    deletedSubjectIds,
+    isActive,
+  } = req.body;
+
+  const updateData = {};
+  if (name !== undefined) updateData.name = name.trim();
+  if (code !== undefined) updateData.code = code.trim().toUpperCase();
+  if (numericOrder !== undefined) updateData.numericOrder = numericOrder;
+  if (description !== undefined) updateData.description = description;
+  if (floorNumber !== undefined) updateData.floorNumber = floorNumber;
+  if (building !== undefined) updateData.building = building;
+  if (roomNumber !== undefined) updateData.roomNumber = roomNumber;
+  if (classTeacherId !== undefined) updateData.classTeacherId = classTeacherId || null;
+  if (books !== undefined && Array.isArray(books)) updateData.books = books;
+  if (isActive !== undefined) updateData.isActive = isActive;
+
+  const updated = await SchoolClass.findByIdAndUpdate(req.params.id, updateData, {
     new: true,
     runValidators: true,
-  });
+  }).populate('classTeacherId', 'firstName lastName employeeId email phone');
+
   if (!updated) throw ApiError.notFound('Class not found');
+
+  // If sections provided, create or update them
+  if (Array.isArray(sections)) {
+    for (const sec of sections) {
+      if (!sec.name) continue;
+      if (sec._id) {
+        await Section.findByIdAndUpdate(sec._id, {
+          name: sec.name.trim().toUpperCase(),
+          capacity: sec.capacity || 40,
+          classTeacherId: sec.classTeacherId || null,
+          roomNumber: sec.roomNumber || '',
+        });
+      } else {
+        await Section.create({
+          name: sec.name.trim().toUpperCase(),
+          classId: updated._id,
+          capacity: sec.capacity || 40,
+          classTeacherId: sec.classTeacherId || null,
+          roomNumber: sec.roomNumber || '',
+        });
+      }
+    }
+  }
+
+  // Handle explicitly removed sections (if safe)
+  if (Array.isArray(deletedSectionIds) && deletedSectionIds.length > 0) {
+    for (const sId of deletedSectionIds) {
+      const studentCount = await Student.countDocuments({ currentSection: sId });
+      if (studentCount === 0) {
+        await Section.findByIdAndDelete(sId);
+      }
+    }
+  }
+
+  // If subjects provided, create or update them
+  if (Array.isArray(subjects)) {
+    for (const sub of subjects) {
+      if (!sub.name || !sub.code) continue;
+      const teacherIds = Array.isArray(sub.assignedTeacherIds)
+        ? sub.assignedTeacherIds
+        : sub.assignedTeacherId
+        ? [sub.assignedTeacherId]
+        : [];
+
+      if (sub._id) {
+        await Subject.findByIdAndUpdate(sub._id, {
+          name: sub.name.trim(),
+          code: sub.code.trim().toUpperCase(),
+          type: sub.type || 'Core',
+          totalMarks: sub.totalMarks || 100,
+          passMarks: sub.passMarks || 40,
+          assignedTeacherIds: teacherIds,
+        });
+      } else {
+        await Subject.create({
+          name: sub.name.trim(),
+          code: sub.code.trim().toUpperCase(),
+          type: sub.type || 'Core',
+          classId: updated._id,
+          totalMarks: sub.totalMarks || 100,
+          passMarks: sub.passMarks || 40,
+          assignedTeacherIds: teacherIds,
+        });
+      }
+    }
+  }
+
+  // Handle explicitly removed subjects
+  if (Array.isArray(deletedSubjectIds) && deletedSubjectIds.length > 0) {
+    await Subject.deleteMany({ _id: { $in: deletedSubjectIds }, classId: updated._id });
+  }
+
   return ApiResponse.ok(res, updated, 'Class updated successfully');
+});
+
+export const deleteClass = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const studentCount = await Student.countDocuments({ currentClass: id });
+  if (studentCount > 0) {
+    throw ApiError.badRequest(`Cannot delete class. ${studentCount} active student(s) are enrolled in this class.`);
+  }
+
+  await Section.deleteMany({ classId: id });
+  await Subject.deleteMany({ classId: id });
+  const deleted = await SchoolClass.findByIdAndDelete(id);
+  if (!deleted) throw ApiError.notFound('Class not found');
+
+  return ApiResponse.ok(res, null, 'Class and associated records deleted successfully');
 });
 
 // ==================== SECTIONS ====================
@@ -77,7 +292,7 @@ export const getSections = asyncHandler(async (req, res) => {
   const filter = classId ? { classId } : {};
   const sections = await Section.find(filter)
     .populate('classId', 'name code')
-    .populate('classTeacherId', 'firstName lastName employeeId email')
+    .populate('classTeacherId', 'firstName lastName employeeId email phone')
     .sort({ name: 1 });
 
   return ApiResponse.ok(res, sections, 'Sections retrieved successfully');
@@ -103,10 +318,24 @@ export const updateSection = asyncHandler(async (req, res) => {
   const section = await Section.findByIdAndUpdate(req.params.id, req.body, {
     new: true,
     runValidators: true,
-  }).populate('classId', 'name code').populate('classTeacherId', 'firstName lastName');
+  })
+    .populate('classId', 'name code')
+    .populate('classTeacherId', 'firstName lastName employeeId email phone');
 
   if (!section) throw ApiError.notFound('Section not found');
   return ApiResponse.ok(res, section, 'Section updated successfully');
+});
+
+export const deleteSection = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const studentCount = await Student.countDocuments({ currentSection: id });
+  if (studentCount > 0) {
+    throw ApiError.badRequest(`Cannot delete section. ${studentCount} active student(s) are currently enrolled in it.`);
+  }
+
+  const deleted = await Section.findByIdAndDelete(id);
+  if (!deleted) throw ApiError.notFound('Section not found');
+  return ApiResponse.ok(res, null, 'Section deleted successfully');
 });
 
 // ==================== SUBJECTS ====================
@@ -115,16 +344,22 @@ export const getSubjects = asyncHandler(async (req, res) => {
   const filter = classId ? { classId } : {};
   const subjects = await Subject.find(filter)
     .populate('classId', 'name code')
-    .populate('assignedTeacherIds', 'firstName lastName employeeId')
+    .populate('assignedTeacherIds', 'firstName lastName employeeId email phone')
     .sort({ name: 1 });
 
   return ApiResponse.ok(res, subjects, 'Subjects retrieved successfully');
 });
 
 export const createSubject = asyncHandler(async (req, res) => {
-  const { name, code, type, classId, totalMarks, passMarks, assignedTeacherIds } = req.body;
+  const { name, code, type, classId, totalMarks, passMarks, assignedTeacherIds, assignedTeacherId } = req.body;
   const existing = await Subject.findOne({ code: code.toUpperCase(), classId });
   if (existing) throw ApiError.conflict(`Subject code '${code}' already exists for this class.`);
+
+  const teacherIds = Array.isArray(assignedTeacherIds)
+    ? assignedTeacherIds
+    : assignedTeacherId
+    ? [assignedTeacherId]
+    : [];
 
   const subject = await Subject.create({
     name,
@@ -133,19 +368,42 @@ export const createSubject = asyncHandler(async (req, res) => {
     classId,
     totalMarks: totalMarks || 100,
     passMarks: passMarks || 40,
-    assignedTeacherIds: assignedTeacherIds || [],
+    assignedTeacherIds: teacherIds,
   });
 
   return ApiResponse.created(res, subject, 'Subject created successfully');
 });
 
 export const updateSubject = asyncHandler(async (req, res) => {
-  const subject = await Subject.findByIdAndUpdate(req.params.id, req.body, {
+  const { name, code, type, classId, totalMarks, passMarks, assignedTeacherIds, assignedTeacherId } = req.body;
+  const updateData = {};
+  if (name !== undefined) updateData.name = name;
+  if (code !== undefined) updateData.code = code.toUpperCase();
+  if (type !== undefined) updateData.type = type;
+  if (classId !== undefined) updateData.classId = classId;
+  if (totalMarks !== undefined) updateData.totalMarks = totalMarks;
+  if (passMarks !== undefined) updateData.passMarks = passMarks;
+
+  if (assignedTeacherIds !== undefined) {
+    updateData.assignedTeacherIds = Array.isArray(assignedTeacherIds) ? assignedTeacherIds : [];
+  } else if (assignedTeacherId !== undefined) {
+    updateData.assignedTeacherIds = assignedTeacherId ? [assignedTeacherId] : [];
+  }
+
+  const subject = await Subject.findByIdAndUpdate(req.params.id, updateData, {
     new: true,
     runValidators: true,
-  });
+  }).populate('assignedTeacherIds', 'firstName lastName employeeId');
+
   if (!subject) throw ApiError.notFound('Subject not found');
   return ApiResponse.ok(res, subject, 'Subject updated successfully');
+});
+
+export const deleteSubject = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const deleted = await Subject.findByIdAndDelete(id);
+  if (!deleted) throw ApiError.notFound('Subject not found');
+  return ApiResponse.ok(res, null, 'Subject deleted successfully');
 });
 
 // ==================== DEPARTMENTS & DESIGNATIONS ====================

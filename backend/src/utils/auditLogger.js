@@ -10,18 +10,23 @@ export const logAudit = async ({
   action,
   resource,
   resourceId = null,
+  description = null,
   diff = null,
+  details = null,
   status = 'SUCCESS',
   failureReason = null,
 }) => {
   try {
-    const actorId = actor?._id || req?.user?._id;
+    const actorUser = actor || req?.user;
+    const actorId = actorUser?._id || null;
     const actorName =
-      actor?.username ||
-      (req?.user ? `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.username : 'System');
-    const actorRole = actor?.role?.name || req?.user?.role?.name || 'SYSTEM';
+      (actorUser ? `${actorUser.firstName || ''} ${actorUser.lastName || ''}`.trim() : '') ||
+      actorUser?.username ||
+      'System / Guest';
+    const actorEmail = actorUser?.email || '';
+    const actorRole = actorUser?.role?.name || (actorUser?.role ? String(actorUser.role) : 'SYSTEM');
 
-    if (!actorId || !action || !resource) {
+    if (!action || !resource) {
       return null;
     }
 
@@ -36,13 +41,16 @@ export const logAudit = async ({
     const logEntry = await AuditLog.create({
       actorId,
       actorName,
+      actorEmail,
       actorRole,
-      action,
+      action: String(action).toUpperCase(),
       resource,
-      resourceId,
+      resourceId: resourceId ? String(resourceId) : null,
+      description: description || `${actorName} performed ${action} on ${resource}`,
       ipAddress,
       userAgent,
       diff,
+      details,
       status,
       failureReason,
     });

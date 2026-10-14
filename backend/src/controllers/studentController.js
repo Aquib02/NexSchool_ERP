@@ -5,6 +5,7 @@ import Student from '../models/Student.js';
 import Parent from '../models/Parent.js';
 import AcademicSession from '../models/AcademicSession.js';
 import Document from '../models/Document.js';
+import { logAudit } from '../utils/auditLogger.js';
 
 // ==================== GET STUDENTS (SEARCH, FILTER, PAGINATE) ====================
 export const getStudents = asyncHandler(async (req, res) => {
@@ -242,6 +243,23 @@ export const createStudent = asyncHandler(async (req, res) => {
     .populate('sectionId', 'name')
     .populate('parentId');
 
+  req._auditLogged = true;
+  await logAudit({
+    req,
+    action: 'STUDENT_ENROLLED',
+    resource: 'Student',
+    resourceId: student._id,
+    description: `Enrolled new student: ${student.firstName} ${student.lastName} (${student.studentId}, Roll #${student.rollNumber})`,
+    details: {
+      studentId: student.studentId,
+      fullName: `${student.firstName} ${student.lastName}`,
+      rollNumber: student.rollNumber,
+      admissionNumber: student.admissionNumber,
+    },
+    diff: { before: null, after: populated },
+    status: 'SUCCESS',
+  });
+
   return ApiResponse.created(res, populated, 'Central student profile created successfully');
 });
 
@@ -277,6 +295,17 @@ export const updateStudent = asyncHandler(async (req, res) => {
     .populate('sectionId', 'name')
     .populate('parentId');
 
+  req._auditLogged = true;
+  await logAudit({
+    req,
+    action: 'STUDENT_UPDATED',
+    resource: 'Student',
+    resourceId: id,
+    description: `Updated record for student: ${student.firstName} ${student.lastName} (${student.studentId})`,
+    details: { studentId: student.studentId },
+    status: 'SUCCESS',
+  });
+
   return ApiResponse.ok(res, updated, 'Student updated successfully');
 });
 
@@ -293,6 +322,17 @@ export const updateStudentStatus = asyncHandler(async (req, res) => {
     { new: true }
   );
   if (!student) throw ApiError.notFound('Student not found');
+
+  req._auditLogged = true;
+  await logAudit({
+    req,
+    action: 'STUDENT_STATUS_CHANGED',
+    resource: 'Student',
+    resourceId: student._id,
+    description: `Changed status of student ${student.firstName} ${student.lastName} (${student.studentId}) to ${status}`,
+    details: { studentId: student.studentId, newStatus: status },
+    status: 'SUCCESS',
+  });
 
   return ApiResponse.ok(res, student, `Student status changed to ${status}`);
 });

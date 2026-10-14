@@ -2,30 +2,74 @@ import asyncHandler from '../utils/asyncHandler.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import * as authService from '../services/authService.js';
 import ENV from '../config/env.js';
+import { logAudit } from '../utils/auditLogger.js';
 
 export const login = asyncHandler(async (req, res) => {
   const { username, password } = req.body;
-  const result = await authService.loginUser({ username, password });
+  try {
+    const result = await authService.loginUser({ username, password });
 
-  // Store refresh token in secure HTTP-only cookie
-  res.cookie('refreshToken', result.refreshToken, {
-    httpOnly: true,
-    secure: ENV.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-  });
+    // Store refresh token in secure HTTP-only cookie
+    res.cookie('refreshToken', result.refreshToken, {
+      httpOnly: true,
+      secure: ENV.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
 
-  return ApiResponse.ok(
-    res,
-    {
-      user: result.user,
-      accessToken: result.accessToken,
-    },
-    'Login successful'
-  );
+    req._auditLogged = true;
+    await logAudit({
+      req,
+      actor: result.user,
+      action: 'USER_LOGIN',
+      resource: 'Auth',
+      description: `User ${result.user.username} (${result.user.role?.name || 'USER'}) logged into the system`,
+      details: {
+        userId: result.user._id,
+        username: result.user.username,
+        role: result.user.role?.name,
+        loginTime: new Date().toISOString(),
+      },
+      status: 'SUCCESS',
+    });
+
+    return ApiResponse.ok(
+      res,
+      {
+        user: result.user,
+        accessToken: result.accessToken,
+      },
+      'Login successful'
+    );
+  } catch (err) {
+    req._auditLogged = true;
+    await logAudit({
+      req,
+      action: 'LOGIN_FAILED',
+      resource: 'Auth',
+      description: `Failed login attempt for username/email: "${username || 'empty'}"`,
+      details: {
+        attemptedUsername: username,
+      },
+      status: 'FAILURE',
+      failureReason: err.message || 'Invalid credentials',
+    });
+    throw err;
+  }
 });
 
 export const logout = asyncHandler(async (req, res) => {
+  if (req.user) {
+    req._auditLogged = true;
+    await logAudit({
+      req,
+      actor: req.user,
+      action: 'USER_LOGOUT',
+      resource: 'Auth',
+      description: `User ${req.user.username} (${req.user.role?.name || 'USER'}) logged out`,
+      status: 'SUCCESS',
+    });
+  }
   res.clearCookie('refreshToken');
   res.clearCookie('token');
   return ApiResponse.ok(res, null, 'Logged out successfully');

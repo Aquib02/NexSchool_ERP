@@ -15,6 +15,7 @@ import SchoolClass from '../models/SchoolClass.js';
 import Section from '../models/Section.js';
 import fs from 'fs';
 import path from 'path';
+import { logAudit } from '../utils/auditLogger.js';
 
 // Grade calculation helper
 export const calculateGrade = (percentage) => {
@@ -495,6 +496,18 @@ export const deleteHomework = asyncHandler(async (req, res) => {
 
   await Homework.findByIdAndDelete(id);
 
+  req._auditLogged = true;
+  await logAudit({
+    req,
+    action: 'HOMEWORK_DELETED',
+    resource: 'Homework',
+    resourceId: id,
+    description: `Deleted homework assignment: "${hw.title}"`,
+    details: { title: hw.title, subjectName: hw.subjectName, classId: hw.classId, dueDate: hw.dueDate },
+    diff: { before: hw, after: null },
+    status: 'SUCCESS',
+  });
+
   return ApiResponse.ok(res, { id }, 'Homework assignment deleted successfully');
 });
 
@@ -679,6 +692,17 @@ export const saveExamMarks = asyncHandler(async (req, res) => {
   });
 
   await Mark.bulkWrite(operations);
+
+  req._auditLogged = true;
+  await logAudit({
+    req,
+    action: 'EXAM_MARKS_RECORDED',
+    resource: 'ExamMarks',
+    description: `Recorded marks for ${marksData.length} students in subject`,
+    details: { examId, classId, sectionId, subjectId, totalEntries: marksData.length },
+    status: 'SUCCESS',
+  });
+
   return ApiResponse.ok(res, null, `Marks for ${marksData.length} students recorded`);
 });
 
@@ -1072,6 +1096,16 @@ export const compileClassResults = asyncHandler(async (req, res) => {
     );
     savedReportCards.push(rc);
   }
+
+  req._auditLogged = true;
+  await logAudit({
+    req,
+    action: 'CLASS_RESULTS_COMPILED',
+    resource: 'ClassResults',
+    description: `Compiled examination broadsheet & published report cards for ${savedReportCards.length} students in Class (${exam.name || 'Exam'})`,
+    details: { examId, classId, sectionId, publishedCount: savedReportCards.length },
+    status: 'SUCCESS',
+  });
 
   return ApiResponse.ok(res, {
     count: savedReportCards.length,
