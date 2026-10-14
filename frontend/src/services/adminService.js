@@ -8,18 +8,25 @@ export const adminService = {
 
   // Classes
   getClasses: () => apiClient.get('/admin/classes'),
+  getComprehensiveClass: (id) => apiClient.get(`/admin/classes/${id}/comprehensive`),
   createClass: (data) => apiClient.post('/admin/classes', data),
   updateClass: (id, data) => apiClient.put(`/admin/classes/${id}`, data),
+  deleteClass: (id) => apiClient.delete(`/admin/classes/${id}`),
 
   // Sections
   getSections: (classId) => apiClient.get('/admin/sections', { params: { classId } }),
   createSection: (data) => apiClient.post('/admin/sections', data),
   updateSection: (id, data) => apiClient.put(`/admin/sections/${id}`, data),
+  deleteSection: (id) => apiClient.delete(`/admin/sections/${id}`),
 
   // Subjects
   getSubjects: (classId) => apiClient.get('/admin/subjects', { params: { classId } }),
   createSubject: (data) => apiClient.post('/admin/subjects', data),
   updateSubject: (id, data) => apiClient.put(`/admin/subjects/${id}`, data),
+  deleteSubject: (id) => apiClient.delete(`/admin/subjects/${id}`),
+
+  // Teachers / Faculty
+  getTeachers: () => apiClient.get('/admin/teachers'),
 
   // Departments & Designations
   getDepartments: () => apiClient.get('/admin/departments'),

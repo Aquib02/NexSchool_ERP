@@ -26,6 +26,8 @@ export const printElement = (elementIdOrElement, documentTitle = 'Document', opt
 
   // Clone target element and synchronize form controls (inputs, textareas, selects)
   const clone = el.cloneNode(true);
+  clone.classList.remove('hidden');
+  clone.style.display = 'block';
   const origFormElements = el.querySelectorAll('input, textarea, select');
   const cloneFormElements = clone.querySelectorAll('input, textarea, select');
   origFormElements.forEach((orig, i) => {

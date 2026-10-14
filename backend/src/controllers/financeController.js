@@ -7,6 +7,7 @@ import Expense from '../models/Expense.js';
 import Student from '../models/Student.js';
 import SchoolClass from '../models/SchoolClass.js';
 import AcademicSession from '../models/AcademicSession.js';
+import { logAudit } from '../utils/auditLogger.js';
 
 // Helper to generate unique human-readable transactional serials
 const generateCode = (prefix) => {
@@ -596,6 +597,24 @@ export const collectPayment = async (req, res, next) => {
         balanceRemaining: invoice.balanceAmount,
       },
       issuedBy: req.user?._id || new mongoose.Types.ObjectId(),
+    });
+
+    req._auditLogged = true;
+    await logAudit({
+      req,
+      action: 'FEE_PAYMENT_COLLECTED',
+      resource: 'FeePayment',
+      resourceId: payment._id,
+      description: `Collected fee payment of $${payAmount} (${paymentMethod}) for student ${student?.firstName || ''} ${student?.lastName || ''}. Receipt #${receipt.receiptNumber}`,
+      details: {
+        receiptNumber: receipt.receiptNumber,
+        paymentNumber: payment.paymentNumber,
+        invoiceNumber: invoice.invoiceNumber,
+        amount: payAmount,
+        paymentMethod,
+        remainingBalance: invoice.balanceAmount,
+      },
+      status: 'SUCCESS',
     });
 
     res.status(201).json({

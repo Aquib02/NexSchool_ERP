@@ -8,6 +8,7 @@ import apiRoutes from './routes/index.js';
 import errorHandler from './middleware/errorHandler.js';
 import ApiError from './utils/ApiError.js';
 import ENV from './config/env.js';
+import globalAuditMiddleware from './middleware/auditMiddleware.js';
 
 const app = express();
 
@@ -89,6 +90,9 @@ app.use(cookieParser());
 // Static file serving for uploads and educational documents
 app.use('/uploads', express.static('uploads'));
 app.use('/documents', express.static('uploads/documents'));
+
+// Global Audit & Security Activity Interceptor
+app.use(globalAuditMiddleware);
 
 // Mount API Endpoints
 app.use('/api', apiRoutes);

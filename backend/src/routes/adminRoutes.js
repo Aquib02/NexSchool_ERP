@@ -6,11 +6,13 @@ const router = Router();
 
 router.use(authenticate);
 
-// Publicly accessible within authenticated users (for dropdowns)
+// Publicly accessible within authenticated users (for dropdowns, views)
 router.get('/sessions', adminController.getSessions);
 router.get('/classes', adminController.getClasses);
+router.get('/classes/:id/comprehensive', adminController.getComprehensiveClassDetails);
 router.get('/sections', adminController.getSections);
 router.get('/subjects', adminController.getSubjects);
+router.get('/teachers', adminController.getTeachers);
 router.get('/departments', adminController.getDepartments);
 router.get('/designations', adminController.getDesignations);
 router.get('/notices', adminController.getNotices);
@@ -24,12 +26,15 @@ router.put('/sessions/:id', adminController.updateSession);
 
 router.post('/classes', adminController.createClass);
 router.put('/classes/:id', adminController.updateClass);
+router.delete('/classes/:id', adminController.deleteClass);
 
 router.post('/sections', adminController.createSection);
 router.put('/sections/:id', adminController.updateSection);
+router.delete('/sections/:id', adminController.deleteSection);
 
 router.post('/subjects', adminController.createSubject);
 router.put('/subjects/:id', adminController.updateSubject);
+router.delete('/subjects/:id', adminController.deleteSubject);
 
 router.post('/departments', adminController.createDepartment);
 router.post('/designations', adminController.createDesignation);
