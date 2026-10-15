@@ -37,15 +37,16 @@ export const Sidebar = ({ isOpen, isCollapsed, toggleCollapse, closeMobileSideba
   const location = useLocation();
 
   const isStudent = user?.role?.name === 'STUDENT';
+  const isParent = user?.role?.name === 'PARENT';
 
   // Navigation catalog structured into Parent Modules and associated Sub-Modules
   const navigationGroups = useMemo(() => [
     {
       id: 'dashboard',
-      name: isStudent ? 'Student Portal' : 'Dashboard',
-      icon: isStudent ? UserCircle : LayoutDashboard,
+      name: isStudent ? 'Student Portal' : isParent ? 'Parent Portal' : 'Dashboard',
+      icon: isStudent ? UserCircle : isParent ? Users : LayoutDashboard,
       isStandalone: true,
-      path: isStudent ? '/portal/student' : '/dashboard',
+      path: isStudent ? '/portal/student' : isParent ? '/portal/parent' : '/dashboard',
       show: true,
     },
     {
@@ -96,7 +97,13 @@ export const Sidebar = ({ isOpen, isCollapsed, toggleCollapse, closeMobileSideba
           name: 'Student Portal',
           path: '/portal/student',
           icon: UserCircle,
-          show: !isStudent,
+          show: !isStudent && !isParent,
+        },
+        {
+          name: 'Parent Portal',
+          path: '/portal/parent',
+          icon: Users,
+          show: !isStudent && !isParent,
         },
       ],
     },
@@ -165,12 +172,6 @@ export const Sidebar = ({ isOpen, isCollapsed, toggleCollapse, closeMobileSideba
           path: '/notices',
           icon: Megaphone,
           show: true,
-        },
-        {
-          name: 'Parent Portal',
-          path: '/portal/parent',
-          icon: Home,
-          show: !isStudent,
         },
       ],
     },
@@ -250,7 +251,7 @@ export const Sidebar = ({ isOpen, isCollapsed, toggleCollapse, closeMobileSideba
         },
       ],
     },
-  ], [hasPermission, hasRole]);
+  ], [hasPermission, hasRole, isStudent, isParent]);
 
   // Accordion open/close state for parent modules
   const [openModules, setOpenModules] = useState(() => {

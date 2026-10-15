@@ -30,6 +30,8 @@ export const LoginPage = () => {
     if (result.success) {
       if (result.user?.role?.name === 'STUDENT') {
         navigate('/portal/student', { replace: true });
+      } else if (result.user?.role?.name === 'PARENT') {
+        navigate('/portal/parent', { replace: true });
       } else {
         navigate(from, { replace: true });
       }

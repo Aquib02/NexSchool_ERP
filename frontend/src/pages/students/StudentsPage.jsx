@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import * as XLSX from 'xlsx';
 import {
   Users,
   Search,
@@ -17,6 +18,15 @@ import {
   X,
   Calendar,
   FileSpreadsheet,
+  CheckCircle2,
+  AlertCircle,
+  FileText,
+  Check,
+  Trash2,
+  FileUp,
+  Key,
+  Copy,
+  ExternalLink,
 } from 'lucide-react';
 import Button from '../../components/common/Button.jsx';
 import Badge from '../../components/common/Badge.jsx';
@@ -78,14 +88,70 @@ export const StudentsPage = () => {
     motherPhone: '',
   });
 
-  // Bulk CSV Import Modal
+  // Bulk Student Import Modal State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importTab, setImportTab] = useState('file'); // 'file' | 'paste'
+  const [importFileName, setImportFileName] = useState('');
   const [importSessionId, setImportSessionId] = useState('');
   const [importClassId, setImportClassId] = useState('');
   const [importSectionId, setImportSectionId] = useState('');
+  const [autoAssignRollNumber, setAutoAssignRollNumber] = useState(true);
   const [importCsvText, setImportCsvText] = useState('');
+  const [parsedStudents, setParsedStudents] = useState([]);
   const [isImporting, setIsImporting] = useState(false);
-  const [importMessage, setImportMessage] = useState(null);
+  const [importResults, setImportResults] = useState(null);
+  const [importError, setImportError] = useState(null);
+  const fileInputRef = useRef(null);
+
+  // Single Enrollment Success Credentials Modal State
+  const [enrollmentSuccessData, setEnrollmentSuccessData] = useState(null);
+  const [copiedKey, setCopiedKey] = useState(null);
+
+  const handleCopyText = (text, key) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  const handleDownloadCredentialsCsv = (importedList = []) => {
+    if (!importedList.length) return;
+    const headers = [
+      'Student Name',
+      'Student ID',
+      'Class',
+      'Section',
+      'Roll Number',
+      'Student Login Username',
+      'Student Default Password',
+      'Father Name',
+      'Father Login Username',
+      'Father Default Password',
+    ];
+    const rows = [headers.join(',')];
+    importedList.forEach((s) => {
+      rows.push(
+        [
+          `"${s.name}"`,
+          `"${s.studentId}"`,
+          `"${s.class}"`,
+          `"${s.section}"`,
+          s.rollNumber,
+          `"${s.studentUsername || ''}"`,
+          `"${s.studentPassword || `${(s.name || 'Student').split(' ')[0]}@12345`}"`,
+          `"${s.fatherName || ''}"`,
+          `"${s.fatherUsername || ''}"`,
+          `"${s.fatherPassword || `${(s.fatherName || 'Parent').split(' ')[0]}@12345`}"`,
+        ].join(',')
+      );
+    });
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `student_and_father_credentials_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+  };
 
   // Load classes, sections & academic sessions for filters
   useEffect(() => {
@@ -98,7 +164,16 @@ export const StudentsPage = () => {
         ]);
         setClasses(clsRes.data || []);
         setSections(secRes.data || []);
-        setSessions(sessRes.data?.data || sessRes.data || []);
+        const loadedSessions = sessRes.data?.data || sessRes.data || [];
+        setSessions(loadedSessions);
+
+        // Pre-select active session for import
+        const currentSess = loadedSessions.find((s) => s.isCurrent);
+        if (currentSess) {
+          setImportSessionId(currentSess._id);
+        } else if (loadedSessions.length > 0) {
+          setImportSessionId(loadedSessions[0]._id);
+        }
       } catch (e) {
         console.error('Failed to load metadata', e);
       }
@@ -137,79 +212,281 @@ export const StudentsPage = () => {
     return () => clearTimeout(timer);
   }, [search, selectedClass, selectedSection, selectedStatus, selectedSession]);
 
-  const handleBulkImport = async (e) => {
-    e.preventDefault();
-    if (!importCsvText.trim()) return;
-    setIsImporting(true);
-    setImportMessage(null);
-
-    try {
-      const lines = importCsvText
-        .split('\n')
-        .map((l) => l.trim())
-        .filter((l) => l.length > 0);
-
-      if (lines.length < 2) {
-        throw new Error('CSV must contain a header row and at least one student data row.');
-      }
-
-      const headers = lines[0].split(',').map((h) => h.trim().replace(/^["']|["']$/g, '').toLowerCase());
-      const dataRows = lines.slice(1);
-
-      let successCount = 0;
-      let errorCount = 0;
-
-      for (let i = 0; i < dataRows.length; i++) {
-        const values = dataRows[i].split(',').map((v) => v.trim().replace(/^["']|["']$/g, ''));
-        const row = {};
-        headers.forEach((h, idx) => {
-          row[h] = values[idx] || '';
+  // Helper to normalize and map parsed row keys to student objects
+  const normalizeStudentRows = (rows) => {
+    return rows
+      .map((rawRow, idx) => {
+        const cleanObj = {};
+        Object.keys(rawRow).forEach((k) => {
+          const cleanKey = k.toLowerCase().replace(/[\s_\-]+/g, '');
+          cleanObj[cleanKey] = rawRow[k];
         });
 
-        const newStudent = {
-          academicSessionId: importSessionId || undefined,
-          classId: importClassId || undefined,
-          sectionId: importSectionId || undefined,
-          firstName: row.firstname || row.first_name || (row.name ? row.name.split(' ')[0] : `Student${i + 1}`),
-          lastName: row.lastname || row.last_name || (row.name && row.name.split(' ').length > 1 ? row.name.split(' ').slice(1).join(' ') : 'Enrolled'),
-          gender: row.gender ? (['female', 'other'].includes(row.gender.toLowerCase()) ? (row.gender.toLowerCase() === 'female' ? 'Female' : 'Other') : 'Male') : 'Male',
-          dateOfBirth: row.dateofbirth || row.dob || '2010-01-01',
-          rollNumber: Number(row.rollnumber || row.roll || i + 1),
-          contact: {
-            phone: row.phone || row.contact || '',
-            email: row.email || '',
-          },
-          parentData: {
-            fatherName: row.fathername || row.father || 'Parent / Guardian',
-            fatherPhone: row.phone || row.contact || '9876543210',
-            motherName: row.mothername || row.mother || '',
-            primaryContactNumber: row.phone || row.contact || '9876543210',
-          },
-        };
+        let firstName = (
+          cleanObj.firstname ||
+          cleanObj.studentfirstname ||
+          cleanObj.first ||
+          cleanObj.givenname ||
+          ''
+        ).toString().trim();
 
-        try {
-          await studentService.createStudent(newStudent);
-          successCount++;
-        } catch (err) {
-          console.error(`Failed to import student row ${i + 1}:`, err);
-          errorCount++;
+        let lastName = (
+          cleanObj.lastname ||
+          cleanObj.studentlastname ||
+          cleanObj.last ||
+          cleanObj.surname ||
+          cleanObj.familyname ||
+          ''
+        ).toString().trim();
+
+        if (!firstName && (cleanObj.name || cleanObj.studentname || cleanObj.fullname)) {
+          const fullName = String(cleanObj.name || cleanObj.studentname || cleanObj.fullname).trim();
+          const parts = fullName.split(/\s+/);
+          if (parts.length > 1) {
+            firstName = parts[0];
+            lastName = parts.slice(1).join(' ');
+          } else {
+            firstName = parts[0];
+            lastName = '';
+          }
         }
-      }
 
-      setImportMessage({
-        type: successCount > 0 ? 'success' : 'error',
-        text: `Import complete: ${successCount} past students successfully registered.${errorCount > 0 ? ` (${errorCount} skipped/failed)` : ''}`,
+        const rawGender = String(cleanObj.gender || cleanObj.sex || 'Male').trim().toLowerCase();
+        let gender = 'Male';
+        if (['f', 'female', 'girl'].includes(rawGender)) gender = 'Female';
+        else if (['o', 'other'].includes(rawGender)) gender = 'Other';
+
+        let dob = cleanObj.dateofbirth || cleanObj.dob || cleanObj.birthdate || '';
+        if (dob instanceof Date) {
+          dob = dob.toISOString().split('T')[0];
+        } else if (typeof dob === 'string' && dob.trim()) {
+          dob = dob.trim();
+        } else {
+          dob = '2012-01-01';
+        }
+
+        const rawBlood = String(cleanObj.bloodgroup || cleanObj.blood || 'Unknown').trim().toUpperCase();
+        const validBloods = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+        const bloodGroup = validBloods.includes(rawBlood) ? rawBlood : 'Unknown';
+
+        const className = String(cleanObj.class || cleanObj.classname || cleanObj.grade || '').trim();
+        const sectionName = String(cleanObj.section || cleanObj.sectionname || cleanObj.sec || '').trim().replace(/^section\s+/i, '');
+        const rollNumber = cleanObj.rollnumber || cleanObj.rollno || cleanObj.roll || '';
+        const phone = String(cleanObj.phone || cleanObj.contact || cleanObj.mobile || cleanObj.phonenumber || '').trim();
+        const email = String(cleanObj.email || cleanObj.emailaddress || '').trim();
+        const fatherName = String(cleanObj.fathername || cleanObj.father || cleanObj.parentname || cleanObj.guardianname || '').trim();
+        const fatherPhone = String(cleanObj.fatherphone || cleanObj.parentphone || phone || '').trim();
+        const motherName = String(cleanObj.mothername || cleanObj.mother || '').trim();
+        const address = String(cleanObj.address || cleanObj.street || '').trim();
+
+        const isValid = Boolean(firstName);
+
+        return {
+          id: idx + 1,
+          firstName,
+          lastName,
+          name: `${firstName} ${lastName}`.trim(),
+          gender,
+          dateOfBirth: dob,
+          bloodGroup,
+          class: className,
+          section: sectionName,
+          rollNumber: rollNumber ? Number(rollNumber) : '',
+          phone,
+          email,
+          fatherName,
+          fatherPhone,
+          motherName,
+          address,
+          isValid,
+          error: !firstName ? 'Missing first name' : null,
+        };
+      })
+      .filter((s) => s.firstName || s.lastName || s.phone || s.class);
+  };
+
+  const handleDownloadTemplate = (format = 'csv') => {
+    const sampleData = [
+      {
+        'First Name': 'Aarav',
+        'Last Name': 'Sharma',
+        'Gender': 'Male',
+        'Date of Birth': '2012-05-15',
+        'Blood Group': 'O+',
+        'Class': 'Class 9',
+        'Section': 'A',
+        'Roll Number': 1,
+        'Phone': '9876500001',
+        'Email': 'aarav.sharma@example.com',
+        'Father Name': 'Rajesh Sharma',
+        'Father Phone': '9876500001',
+        'Mother Name': 'Sunita Sharma',
+        'Address': '123 Park Avenue',
+      },
+      {
+        'First Name': 'Priya',
+        'Last Name': 'Verma',
+        'Gender': 'Female',
+        'Date of Birth': '2012-08-20',
+        'Blood Group': 'B+',
+        'Class': 'Class 9',
+        'Section': 'A',
+        'Roll Number': 2,
+        'Phone': '9876500002',
+        'Email': 'priya.verma@example.com',
+        'Father Name': 'Suresh Verma',
+        'Father Phone': '9876500002',
+        'Mother Name': 'Anita Verma',
+        'Address': '456 Civil Lines',
+      },
+      {
+        'First Name': 'Amit',
+        'Last Name': 'Patel',
+        'Gender': 'Male',
+        'Date of Birth': '2012-03-10',
+        'Blood Group': 'A+',
+        'Class': 'Class 9',
+        'Section': 'A',
+        'Roll Number': 3,
+        'Phone': '9876500003',
+        'Email': 'amit.patel@example.com',
+        'Father Name': 'Dinesh Patel',
+        'Father Phone': '9876500003',
+        'Mother Name': 'Geeta Patel',
+        'Address': '789 MG Road',
+      },
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(sampleData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Students_Template');
+
+    if (format === 'csv') {
+      XLSX.writeFile(wb, 'student_import_template.csv', { bookType: 'csv' });
+    } else {
+      XLSX.writeFile(wb, 'student_import_template.xlsx', { bookType: 'xlsx' });
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImportFileName(file.name);
+    setImportError(null);
+    setImportResults(null);
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const json = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+        if (json.length === 0) {
+          setImportError('The uploaded file contains no data rows.');
+          setParsedStudents([]);
+          return;
+        }
+
+        const normalized = normalizeStudentRows(json);
+        if (normalized.length === 0) {
+          setImportError('Could not find any student rows in this file.');
+        }
+        setParsedStudents(normalized);
+      } catch (err) {
+        console.error('File parsing error:', err);
+        setImportError('Failed to parse spreadsheet file: ' + err.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handlePasteData = (text) => {
+    setImportCsvText(text);
+    setImportError(null);
+    setImportResults(null);
+    if (!text.trim()) {
+      setParsedStudents([]);
+      return;
+    }
+    try {
+      const workbook = XLSX.read(text, { type: 'string' });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const json = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+      const normalized = normalizeStudentRows(json);
+      setParsedStudents(normalized);
+    } catch (_) {
+      // Fallback CSV parsing
+      const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+      if (lines.length < 2) {
+        setImportError('Please enter at least a header row and one student data row.');
+        return;
+      }
+      const headers = lines[0].split(/[,\t]/).map((h) => h.trim().replace(/^["']|["']$/g, ''));
+      const rows = lines.slice(1).map((line) => {
+        const vals = line.split(/[,\t]/).map((v) => v.trim().replace(/^["']|["']$/g, ''));
+        const obj = {};
+        headers.forEach((h, idx) => {
+          obj[h] = vals[idx] || '';
+        });
+        return obj;
       });
-      fetchStudents(1);
-      if (successCount > 0) {
-        setTimeout(() => {
-          setIsImportModalOpen(false);
-          setImportCsvText('');
-          setImportMessage(null);
-        }, 2200);
+      const normalized = normalizeStudentRows(rows);
+      setParsedStudents(normalized);
+    }
+  };
+
+  const handleClearImport = () => {
+    setParsedStudents([]);
+    setImportFileName('');
+    setImportCsvText('');
+    setImportError(null);
+    setImportResults(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleBulkImport = async (e) => {
+    if (e) e.preventDefault();
+    if (parsedStudents.length === 0) {
+      setImportError('Please upload a file or paste student records to import.');
+      return;
+    }
+
+    const validStudents = parsedStudents.filter((s) => s.isValid);
+    if (validStudents.length === 0) {
+      setImportError('No valid student rows found. Each student row must contain at least a First Name.');
+      return;
+    }
+
+    setIsImporting(true);
+    setImportError(null);
+    setImportResults(null);
+
+    try {
+      const payload = {
+        students: validStudents,
+        academicSessionId: importSessionId || undefined,
+        defaultClassId: importClassId || undefined,
+        defaultSectionId: importSectionId || undefined,
+        autoAssignRollNumber,
+      };
+
+      const res = await studentService.bulkImportStudents(payload);
+      if (res.success && res.data) {
+        setImportResults(res.data);
+        fetchStudents(1);
+      } else {
+        setImportError(res.message || 'Import failed. Please try again.');
       }
     } catch (err) {
-      setImportMessage({ type: 'error', text: err.message || 'Failed to parse or process CSV file.' });
+      console.error('Import failure:', err);
+      setImportError(err.message || 'Failed to process bulk student import.');
     } finally {
       setIsImporting(false);
     }
@@ -282,7 +559,7 @@ export const StudentsPage = () => {
         },
       };
 
-      await studentService.createStudent(payload);
+      const res = await studentService.createStudent(payload);
       setIsAddModalOpen(false);
       setFormStep(1);
       setStudentForm({
@@ -306,6 +583,9 @@ export const StudentsPage = () => {
         motherPhone: '',
       });
       fetchStudents(1);
+      if (res.data) {
+        setEnrollmentSuccessData(res.data);
+      }
     } catch (err) {
       alert(err.message || 'Failed to enroll student');
     }
@@ -330,8 +610,16 @@ export const StudentsPage = () => {
           </p>
         </div>
         <div className="flex items-center gap-2.5">
-          <Button variant="outline" size="sm" icon={Upload} onClick={() => setIsImportModalOpen(true)}>
-            Bulk Import CSV
+          <Button
+            variant="outline"
+            size="sm"
+            icon={FileSpreadsheet}
+            onClick={() => {
+              setIsImportModalOpen(true);
+              handleClearImport();
+            }}
+          >
+            Import Students
           </Button>
           <Button variant="outline" size="sm" icon={Download} onClick={handleExport}>
             Export CSV
@@ -833,139 +1121,618 @@ export const StudentsPage = () => {
         </form>
       </Modal>
 
-      {/* BULK CSV IMPORT MODAL */}
+      {/* BULK IMPORT STUDENTS MODAL */}
       <Modal
         isOpen={isImportModalOpen}
         onClose={() => {
           setIsImportModalOpen(false);
-          setImportMessage(null);
+          handleClearImport();
         }}
-        title="Bulk Import Past Academic Year Students"
-        subtitle="Quickly ingest historical or batch student records via CSV into any Academic Session."
-        maxWidth="max-w-2xl"
+        title="Import Students"
+        subtitle="Upload a CSV or Excel spreadsheet (.xlsx, .xls) to enroll multiple new students at once."
+        maxWidth="max-w-4xl"
       >
-        <form onSubmit={handleBulkImport} className="space-y-4 text-xs">
-          {importMessage && (
-            <div
-              className={`p-3 rounded-xl border text-xs font-medium ${
-                importMessage.type === 'success'
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                  : 'bg-rose-50 border-rose-200 text-rose-800'
-              }`}
-            >
-              {importMessage.text}
+        <div className="space-y-4 text-xs">
+          {/* Template Download Banner */}
+          <div className="bg-indigo-50/60 border border-indigo-100 rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-indigo-100 text-indigo-700 rounded-xl mt-0.5">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-slate-800 text-xs">Download Spreadsheet Template</h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Pre-configured with student and parent column headers and sample rows. Open in Excel, fill, and upload.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                icon={FileSpreadsheet}
+                onClick={() => handleDownloadTemplate('xlsx')}
+                className="bg-white hover:bg-slate-50"
+              >
+                Template (.xlsx)
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                icon={Download}
+                onClick={() => handleDownloadTemplate('csv')}
+                className="bg-white hover:bg-slate-50"
+              >
+                Template (.csv)
+              </Button>
+            </div>
+          </div>
+
+          {/* Academic Placement Defaults */}
+          <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-3.5 space-y-3">
+            <div className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+              <span>Placement & Session Defaults</span>
+              <span className="text-[11px] font-normal text-slate-400">Class & Section can also be specified per row</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div>
+                <label className="block text-slate-600 font-medium mb-1">Target Academic Session *</label>
+                <select
+                  value={importSessionId}
+                  onChange={(e) => setImportSessionId(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                >
+                  {sessions.map((s) => (
+                    <option key={s._id} value={s._id}>
+                      {s.name} {s.isCurrent ? '★ (Active)' : `(${s.status || 'Past'})`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-slate-600 font-medium mb-1">Default Class (Optional)</label>
+                <select
+                  value={importClassId}
+                  onChange={(e) => {
+                    setImportClassId(e.target.value);
+                    setImportSectionId('');
+                  }}
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                >
+                  <option value="">Choose Class (if not in file)...</option>
+                  {classes.map((c) => (
+                    <option key={c._id} value={c._id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-slate-600 font-medium mb-1">Default Section (Optional)</label>
+                <select
+                  disabled={!importClassId}
+                  value={importSectionId}
+                  onChange={(e) => setImportSectionId(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                >
+                  <option value="">Choose Section (if not in file)...</option>
+                  {sections
+                    .filter((s) => s.classId?._id === importClassId || s.classId === importClassId)
+                    .map((sec) => (
+                      <option key={sec._id} value={sec._id}>Section {sec.name}</option>
+                    ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="checkbox"
+                id="auto-assign-roll"
+                checked={autoAssignRollNumber}
+                onChange={(e) => setAutoAssignRollNumber(e.target.checked)}
+                className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500/20 border-slate-300 cursor-pointer"
+              />
+              <label htmlFor="auto-assign-roll" className="text-xs text-slate-600 cursor-pointer select-none">
+                Automatically assign next available roll number if blank or taken
+              </label>
+            </div>
+          </div>
+
+          {/* Import Results Card */}
+          {importResults && (
+            <div className="p-4 rounded-2xl border space-y-4 bg-emerald-50/70 border-emerald-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 text-emerald-800 font-semibold text-xs">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <span>
+                    Import Complete! Enrolled {importResults.importedCount} student{importResults.importedCount !== 1 ? 's' : ''} & auto-generated student and father login credentials.
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {importResults.imported?.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="xs"
+                      icon={Download}
+                      onClick={() => handleDownloadCredentialsCsv(importResults.imported)}
+                    >
+                      Export Credentials (.csv)
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="xs"
+                    onClick={() => {
+                      setIsImportModalOpen(false);
+                      handleClearImport();
+                    }}
+                  >
+                    Close & View Directory
+                  </Button>
+                </div>
+              </div>
+
+              {/* Generated Credentials Preview Table */}
+              {importResults.imported?.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+                      <Key className="w-3.5 h-3.5 text-indigo-600" /> Auto-Generated System Login Credentials
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      Default passwords: First Name with first letter capital + @12345 (e.g. <code className="font-mono text-indigo-600 font-bold">Ravi@12345</code>)
+                    </span>
+                  </div>
+
+                  <div className="border border-emerald-200/80 rounded-xl overflow-hidden max-h-60 overflow-y-auto bg-white">
+                    <table className="w-full text-left border-collapse text-[11px]">
+                      <thead className="bg-emerald-100/60 border-b border-emerald-200 text-slate-700 sticky top-0">
+                        <tr>
+                          <th className="py-2 px-2.5 font-semibold">Student Name</th>
+                          <th className="py-2 px-2.5 font-semibold">Class / Roll</th>
+                          <th className="py-2 px-2.5 font-semibold text-indigo-700">Student Login</th>
+                          <th className="py-2 px-2.5 font-semibold">Father Name</th>
+                          <th className="py-2 px-2.5 font-semibold text-emerald-800">Father Login</th>
+                          <th className="py-2 px-2.5 font-semibold text-right">Copy</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 bg-white">
+                        {importResults.imported.map((s, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50/60">
+                            <td className="py-2 px-2.5 font-medium text-slate-800">{s.name}</td>
+                            <td className="py-2 px-2.5 text-slate-600">
+                              {s.class} ({s.section}) • Roll #{s.rollNumber}
+                            </td>
+                            <td className="py-2 px-2.5 font-mono text-xs">
+                              <span className="font-bold text-indigo-600">{s.studentUsername || (s.name || 'stu').split(' ')[0].toLowerCase()}</span>
+                              <span className="text-[10px] text-slate-400 ml-1.5 font-normal">({s.studentPassword || `${(s.name || 'Student').split(' ')[0]}@12345`})</span>
+                            </td>
+                            <td className="py-2 px-2.5 text-slate-700 font-medium">{s.fatherName || 'Parent'}</td>
+                            <td className="py-2 px-2.5 font-mono text-xs">
+                              <span className="font-bold text-emerald-700">{s.fatherUsername || (s.fatherName || 'parent').split(' ')[0].toLowerCase()}</span>
+                              <span className="text-[10px] text-slate-400 ml-1.5 font-normal">({s.fatherPassword || `${(s.fatherName || 'Parent').split(' ')[0]}@12345`})</span>
+                              {s.isExistingParentAccount && (
+                                <span className="ml-1 text-[10px] text-slate-400 font-normal">(Existing)</span>
+                              )}
+                            </td>
+                            <td className="py-2 px-2.5 text-right">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const stuPass = s.studentPassword || `${(s.name || 'Student').split(' ')[0]}@12345`;
+                                  const parPass = s.fatherPassword || `${(s.fatherName || 'Parent').split(' ')[0]}@12345`;
+                                  const text = `Student: ${s.name} | Login: ${s.studentUsername} (Pass: ${stuPass})\nFather: ${s.fatherName} | Login: ${s.fatherUsername} (Pass: ${parPass})`;
+                                  handleCopyText(text, `row_${idx}`);
+                                }}
+                                className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 cursor-pointer"
+                                title="Copy Credentials"
+                              >
+                                {copiedKey === `row_${idx}` ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {importResults.failedCount > 0 && (
+                <div className="mt-2 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs">
+                  <p className="font-semibold mb-1">
+                    {importResults.failedCount} row{importResults.failedCount !== 1 ? 's' : ''} could not be imported:
+                  </p>
+                  <ul className="list-disc list-inside space-y-0.5 text-[11px]">
+                    {importResults.errors.map((err, idx) => (
+                      <li key={idx}>
+                        <strong>Row {err.row} ({err.name}):</strong> {err.reason}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <label className="block font-semibold mb-1">Target Academic Year *</label>
-              <select
-                required
-                value={importSessionId}
-                onChange={(e) => setImportSessionId(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20"
-              >
-                <option value="">Select Academic Year...</option>
-                {sessions.map((s) => (
-                  <option key={s._id} value={s._id}>
-                    {s.name} {s.isCurrent ? '★ (Active)' : `(${s.status || 'Past'})`}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {/* Input Method Tabs */}
+          {!importResults && (
+            <>
+              <div className="flex items-center border-b border-slate-200 gap-6 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setImportTab('file')}
+                  className={`pb-2.5 transition-colors relative flex items-center gap-2 cursor-pointer ${
+                    importTab === 'file'
+                      ? 'text-indigo-600 border-b-2 border-indigo-600'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <FileUp className="w-4 h-4" />
+                  Upload Spreadsheet (.csv / .xlsx)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImportTab('paste')}
+                  className={`pb-2.5 transition-colors relative flex items-center gap-2 cursor-pointer ${
+                    importTab === 'paste'
+                      ? 'text-indigo-600 border-b-2 border-indigo-600'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <FileText className="w-4 h-4" />
+                  Paste CSV / Text Data
+                </button>
+              </div>
 
-            <div>
-              <label className="block font-semibold mb-1">Assign Class *</label>
-              <select
-                required
-                value={importClassId}
-                onChange={(e) => {
-                  setImportClassId(e.target.value);
-                  setImportSectionId('');
-                }}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20"
-              >
-                <option value="">Select Class...</option>
-                {classes.map((c) => (
-                  <option key={c._id} value={c._id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
+              {/* Tab 1: File Upload */}
+              {importTab === 'file' && (
+                <div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv, .xlsx, .xls, text/csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    id="import-student-file-input"
+                  />
 
-            <div>
-              <label className="block font-semibold mb-1">Assign Section *</label>
-              <select
-                required
-                disabled={!importClassId}
-                value={importSectionId}
-                onChange={(e) => setImportSectionId(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl disabled:opacity-50 focus:ring-2 focus:ring-indigo-500/20"
-              >
-                <option value="">Select Section...</option>
-                {sections
-                  .filter((s) => s.classId?._id === importClassId || s.classId === importClassId)
-                  .map((sec) => (
-                    <option key={sec._id} value={sec._id}>Section {sec.name}</option>
-                  ))}
-              </select>
-            </div>
-          </div>
+                  {importFileName ? (
+                    <div className="p-4 bg-indigo-50/50 border border-indigo-200 rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-indigo-100 text-indigo-700 rounded-xl">
+                          <FileSpreadsheet className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-800 text-xs">{importFileName}</p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            {parsedStudents.length} student record{parsedStudents.length !== 1 ? 's' : ''} detected
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        icon={Trash2}
+                        onClick={handleClearImport}
+                        className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                      >
+                        Remove File
+                      </Button>
+                    </div>
+                  ) : (
+                    <label
+                      htmlFor="import-student-file-input"
+                      className="border-2 border-dashed border-slate-300 hover:border-indigo-500 bg-slate-50/50 hover:bg-indigo-50/20 transition-all rounded-2xl p-7 flex flex-col items-center justify-center text-center cursor-pointer group"
+                    >
+                      <div className="w-12 h-12 rounded-2xl bg-indigo-50 group-hover:bg-indigo-100 text-indigo-600 flex items-center justify-center mb-3 transition-colors">
+                        <FileUp className="w-6 h-6" />
+                      </div>
+                      <p className="text-xs font-semibold text-slate-700">
+                        Click to browse or drag and drop your spreadsheet here
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Compatible with Microsoft Excel (.xlsx, .xls) and Comma-Separated Values (.csv)
+                      </p>
+                    </label>
+                  )}
+                </div>
+              )}
 
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block font-semibold">
-                CSV Data (Paste rows with header) *
-              </label>
-              <button
+              {/* Tab 2: Paste CSV */}
+              {importTab === 'paste' && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-slate-600">
+                      Paste CSV rows (first row must be column headers)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const sampleText =
+                          `First Name,Last Name,Gender,Date of Birth,Class,Section,Roll Number,Phone,Father Name\n` +
+                          `Rohan,Sharma,Male,2012-05-15,Class 9,A,11,9876500011,Rajesh Sharma\n` +
+                          `Priya,Verma,Female,2012-08-20,Class 9,A,12,9876500012,Suresh Verma\n` +
+                          `Amit,Patel,Male,2012-03-10,Class 9,A,13,9876500013,Dinesh Patel`;
+                        handlePasteData(sampleText);
+                      }}
+                      className="text-indigo-600 hover:text-indigo-800 font-medium text-[11px] underline cursor-pointer"
+                    >
+                      Load Sample Paste Data
+                    </button>
+                  </div>
+                  <textarea
+                    rows={5}
+                    value={importCsvText}
+                    onChange={(e) => handlePasteData(e.target.value)}
+                    placeholder="First Name,Last Name,Gender,Date of Birth,Class,Section,Roll Number,Phone,Father Name&#10;Rahul,Kumar,Male,2012-04-10,Class 9,A,14,9876543210,Santosh Kumar"
+                    className="w-full font-mono text-[11px] p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  />
+                </div>
+              )}
+
+              {/* Error Message */}
+              {importError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{importError}</span>
+                </div>
+              )}
+
+              {/* Parsed Data Preview */}
+              {parsedStudents.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="font-semibold text-slate-700 flex items-center gap-2">
+                      <span>Data Preview</span>
+                      <Badge variant="primary" size="xs">
+                        {parsedStudents.length} student{parsedStudents.length !== 1 ? 's' : ''} detected
+                      </Badge>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleClearImport}
+                      className="text-slate-400 hover:text-slate-600 text-[11px] cursor-pointer"
+                    >
+                      Clear Data
+                    </button>
+                  </div>
+
+                  <div className="border border-slate-200 rounded-xl overflow-hidden max-h-56 overflow-y-auto">
+                    <table className="w-full text-left border-collapse text-[11px]">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 sticky top-0">
+                        <tr>
+                          <th className="py-2 px-2.5 font-semibold">#</th>
+                          <th className="py-2 px-2.5 font-semibold">Name</th>
+                          <th className="py-2 px-2.5 font-semibold">Gender</th>
+                          <th className="py-2 px-2.5 font-semibold">DOB</th>
+                          <th className="py-2 px-2.5 font-semibold">Class / Sec</th>
+                          <th className="py-2 px-2.5 font-semibold">Roll</th>
+                          <th className="py-2 px-2.5 font-semibold">Phone</th>
+                          <th className="py-2 px-2.5 font-semibold">Parent</th>
+                          <th className="py-2 px-2.5 font-semibold text-right">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 bg-white">
+                        {parsedStudents.map((s, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50/60">
+                            <td className="py-2 px-2.5 text-slate-400 font-mono">{idx + 1}</td>
+                            <td className="py-2 px-2.5 font-medium text-slate-800">
+                              {s.name || <span className="text-rose-500 italic">Missing</span>}
+                            </td>
+                            <td className="py-2 px-2.5 text-slate-600">{s.gender}</td>
+                            <td className="py-2 px-2.5 text-slate-600 font-mono text-[10px]">{s.dateOfBirth}</td>
+                            <td className="py-2 px-2.5 text-slate-600">
+                              {s.class || (importClassId ? classes.find((c) => c._id === importClassId)?.name : '-')}{' '}
+                              {s.section ? `(${s.section})` : (importSectionId ? `(${sections.find((sec) => sec._id === importSectionId)?.name})` : '')}
+                            </td>
+                            <td className="py-2 px-2.5 text-slate-600 font-mono">
+                              {s.rollNumber || <span className="text-slate-400 italic">Auto</span>}
+                            </td>
+                            <td className="py-2 px-2.5 text-slate-600">{s.phone || '-'}</td>
+                            <td className="py-2 px-2.5 text-slate-600">{s.fatherName || '-'}</td>
+                            <td className="py-2 px-2.5 text-right">
+                              {s.isValid ? (
+                                <Badge variant="success" size="xs">Ready</Badge>
+                              ) : (
+                                <Badge variant="danger" size="xs">{s.error || 'Invalid'}</Badge>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Modal Footer */}
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <div>
+              {parsedStudents.length > 0 && !importResults && (
+                <span className="text-[11px] text-slate-500">
+                  {parsedStudents.filter((s) => s.isValid).length} student{parsedStudents.filter((s) => s.isValid).length !== 1 ? 's' : ''} ready to enroll
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2.5">
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 onClick={() => {
-                  setImportCsvText(
-                    `firstName,lastName,gender,dateOfBirth,rollNumber,phone,fatherName,motherName\n` +
-                    `Rahul,Verma,Male,2010-05-12,1,9876500001,Suresh Verma,Anita Verma\n` +
-                    `Priya,Singh,Female,2010-08-22,2,9876500002,Manoj Singh,Kavita Singh\n` +
-                    `Amit,Patel,Male,2010-03-10,3,9876500003,Dinesh Patel,Geeta Patel`
-                  );
+                  setIsImportModalOpen(false);
+                  handleClearImport();
                 }}
-                className="text-indigo-600 hover:text-indigo-800 font-medium text-[11px] underline cursor-pointer"
               >
-                Load Sample CSV Template
-              </button>
-            </div>
-            <textarea
-              rows={7}
-              required
-              value={importCsvText}
-              onChange={(e) => setImportCsvText(e.target.value)}
-              placeholder={`firstName,lastName,gender,dateOfBirth,rollNumber,phone,fatherName,motherName\nAarav,Sharma,Male,2010-01-15,1,9876543210,Rajesh Sharma,Sunita Sharma`}
-              className="w-full font-mono text-[11px] p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-            />
-            <p className="text-[11px] text-slate-500 mt-1">
-              Required headers: <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-700">firstName, lastName, gender, dateOfBirth, rollNumber, phone, fatherName, motherName</code>
-            </p>
-          </div>
+                {importResults ? 'Close' : 'Cancel'}
+              </Button>
 
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => setIsImportModalOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              size="sm"
-              icon={Upload}
-              isLoading={isImporting}
-              disabled={isImporting || !importCsvText.trim()}
-            >
-              {isImporting ? 'Importing Records...' : 'Start Import'}
-            </Button>
+              {!importResults && (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  icon={Upload}
+                  isLoading={isImporting}
+                  disabled={isImporting || parsedStudents.length === 0}
+                  onClick={handleBulkImport}
+                >
+                  {isImporting
+                    ? 'Enrolling Students...'
+                    : `Import ${parsedStudents.length > 0 ? `${parsedStudents.filter((s) => s.isValid).length} ` : ''}Student${parsedStudents.filter((s) => s.isValid).length !== 1 ? 's' : ''}`}
+                </Button>
+              )}
+            </div>
           </div>
-        </form>
+        </div>
+      </Modal>
+
+      {/* SINGLE STUDENT ENROLLMENT SUCCESS & CREDENTIALS MODAL */}
+      <Modal
+        isOpen={!!enrollmentSuccessData}
+        onClose={() => setEnrollmentSuccessData(null)}
+        title="Student Enrolled & Credentials Generated"
+        subtitle="System login accounts have been automatically created for both the student and their father/guardian."
+        maxWidth="max-w-xl"
+      >
+        {enrollmentSuccessData && (
+          <div className="space-y-4 text-xs">
+            {/* Success Banner */}
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="font-bold text-emerald-900 text-xs">
+                  {enrollmentSuccessData.student?.fullName || `${enrollmentSuccessData.student?.firstName} ${enrollmentSuccessData.student?.lastName}`} enrolled successfully!
+                </p>
+                <p className="text-[11px] text-emerald-700 mt-0.5">
+                  ID: <span className="font-mono font-bold">{enrollmentSuccessData.student?.studentId}</span> • Class: {enrollmentSuccessData.student?.classId?.name || ''} ({enrollmentSuccessData.student?.sectionId?.name || ''}) • Roll #{enrollmentSuccessData.student?.rollNumber}
+                </p>
+              </div>
+            </div>
+
+            {/* Credentials Grid */}
+            <div className="space-y-3">
+              {/* Student Credentials */}
+              <div className="p-3.5 bg-indigo-50/60 border border-indigo-200/80 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-indigo-900 flex items-center gap-1.5">
+                    <Key className="w-3.5 h-3.5 text-indigo-600" /> Student Portal Login Credentials
+                  </span>
+                  <Badge variant="primary" size="xs">STUDENT PORTAL</Badge>
+                </div>
+                <div className="bg-white p-3 rounded-xl border border-indigo-100 flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <p className="text-[11px] text-slate-400">Login Username</p>
+                    <p className="font-mono font-bold text-indigo-600 text-xs">
+                      {enrollmentSuccessData.credentials?.studentCredentials?.username || enrollmentSuccessData.student?.studentId?.toLowerCase()}
+                    </p>
+                  </div>
+                  <div className="space-y-0.5 text-right">
+                    <p className="text-[11px] text-slate-400">Default Password</p>
+                    <p className="font-mono font-bold text-slate-700 text-xs">
+                      {enrollmentSuccessData.credentials?.studentCredentials?.password ||
+                        `${(enrollmentSuccessData.student?.firstName || 'Student')}@12345`}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Father Credentials */}
+              <div className="p-3.5 bg-emerald-50/60 border border-emerald-200/80 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-emerald-900 flex items-center gap-1.5">
+                    <Key className="w-3.5 h-3.5 text-emerald-600" /> Father / Guardian Login Credentials
+                  </span>
+                  <Badge variant="success" size="xs">PARENT PORTAL</Badge>
+                </div>
+                <div className="bg-white p-3 rounded-xl border border-emerald-100 flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <p className="text-[11px] text-slate-400">
+                      {enrollmentSuccessData.student?.parentId?.fatherName ? `${enrollmentSuccessData.student.parentId.fatherName} (Username)` : 'Father Username'}
+                    </p>
+                    <p className="font-mono font-bold text-emerald-700 text-xs">
+                      {enrollmentSuccessData.credentials?.parentCredentials?.username || 'parent'}
+                      {enrollmentSuccessData.credentials?.parentCredentials?.isNew === false && (
+                        <span className="ml-1 text-[10px] text-slate-400 font-normal">(Existing Account)</span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="space-y-0.5 text-right">
+                    <p className="text-[11px] text-slate-400">Default Password</p>
+                    <p className="font-mono font-bold text-slate-700 text-xs">
+                      {enrollmentSuccessData.credentials?.parentCredentials?.password ||
+                        (enrollmentSuccessData.student?.parentId?.fatherName
+                          ? `${enrollmentSuccessData.student.parentId.fatherName.trim().split(' ')[0]}@12345`
+                          : 'Parent@12345')}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                icon={copiedKey === 'enroll_single' ? Check : Copy}
+                onClick={() => {
+                  const s = enrollmentSuccessData.student;
+                  const c = enrollmentSuccessData.credentials;
+                  const sPass =
+                    c?.studentCredentials?.password || `${(s?.firstName || 'Student')}@12345`;
+                  const pPass =
+                    c?.parentCredentials?.password ||
+                    (s?.parentId?.fatherName
+                      ? `${s.parentId.fatherName.trim().split(' ')[0]}@12345`
+                      : 'Parent@12345');
+                  const text = `NexSchool ERP Login Credentials\n\nStudent: ${s?.fullName || `${s?.firstName} ${s?.lastName}`}\nUsername: ${c?.studentCredentials?.username || s?.studentId?.toLowerCase()}\nPassword: ${sPass}\nPortal: ${window.location.origin}/login\n\nFather: ${s?.parentId?.fatherName || 'Parent'}\nUsername: ${c?.parentCredentials?.username}\nPassword: ${pPass}\nPortal: ${window.location.origin}/login`;
+                  handleCopyText(text, 'enroll_single');
+                }}
+              >
+                {copiedKey === 'enroll_single' ? 'Credentials Copied!' : 'Copy Credentials for WhatsApp/SMS'}
+              </Button>
+
+              <div className="flex items-center gap-2 justify-end">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="xs"
+                  onClick={() => setEnrollmentSuccessData(null)}
+                >
+                  Close
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="xs"
+                  icon={ExternalLink}
+                  onClick={() => {
+                    const sid = enrollmentSuccessData.student?._id;
+                    setEnrollmentSuccessData(null);
+                    if (sid) navigate(`/students/${sid}`);
+                  }}
+                >
+                  View Full Profile
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );
