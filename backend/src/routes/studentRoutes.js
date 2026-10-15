@@ -16,6 +16,7 @@ router.get('/:id', (req, res, next) => {
 }, studentController.getStudentById);
 
 router.post('/', checkPermission('students:create'), studentController.createStudent);
+router.post('/bulk-import', checkPermission('students:create'), studentController.bulkImportStudents);
 router.put('/:id', checkPermission('students:update'), studentController.updateStudent);
 router.patch('/:id/status', checkPermission('students:update'), studentController.updateStudentStatus);
 

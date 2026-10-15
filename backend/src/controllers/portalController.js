@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import '../models/index.js';
 import Student from '../models/Student.js';
 import Parent from '../models/Parent.js';
 import Attendance from '../models/Attendance.js';
@@ -85,15 +86,12 @@ export const getStudentPortalData = async (req, res, next) => {
     const todayDayName = DAYS_OF_WEEK[new Date().getDay()];
     let todaySchedule = [];
     if (classId && sectionId) {
-      const timetable = await Timetable.findOne({ classId, sectionId })
-        .populate('days.periods.subjectId', 'name code')
-        .populate('days.periods.teacherId', 'firstName lastName');
+      const timetable = await Timetable.findOne({ classId, sectionId, dayOfWeek: todayDayName })
+        .populate('periods.subjectId', 'name code')
+        .populate('periods.teacherId', 'firstName lastName');
 
-      if (timetable && timetable.days) {
-        const dayEntry = timetable.days.find((d) => d.day === todayDayName);
-        if (dayEntry) {
-          todaySchedule = dayEntry.periods;
-        }
+      if (timetable && timetable.periods) {
+        todaySchedule = timetable.periods;
       }
     }
 
@@ -102,7 +100,7 @@ export const getStudentPortalData = async (req, res, next) => {
     if (classId && sectionId) {
       homeworkList = await Homework.find({ classId, sectionId })
         .populate('subjectId', 'name code')
-        .populate('teacherId', 'firstName lastName')
+        .populate('assignedBy', 'firstName lastName')
         .sort({ dueDate: 1 })
         .limit(10);
     }
@@ -110,7 +108,7 @@ export const getStudentPortalData = async (req, res, next) => {
     // 4. Latest Report Cards
     const reportCards = await ReportCard.find({ studentId })
       .populate('examId', 'name examType term')
-      .populate('marks.subjectId', 'name code')
+      .populate('subjectsSummary.subjectId', 'name code')
       .sort({ createdAt: -1 })
       .limit(5);
 
@@ -125,8 +123,8 @@ export const getStudentPortalData = async (req, res, next) => {
 
     // 6. Transport Allocation (if any)
     const transport = await TransportAllocation.findOne({ studentId, status: 'Active' })
-      .populate('routeId', 'name routeNumber stops')
-      .populate('vehicleId', 'registrationNumber vehicleNumber driverName driverPhone');
+      .populate('routeId', 'routeName stops')
+      .populate('vehicleId', 'vehicleNumber model driver');
 
     // 7. Targeted Notices
     const notices = await Notice.find({
@@ -257,7 +255,7 @@ export const getParentPortalData = async (req, res, next) => {
     if (classId && sectionId) {
       homeworkList = await Homework.find({ classId, sectionId })
         .populate('subjectId', 'name code')
-        .populate('teacherId', 'firstName lastName')
+        .populate('assignedBy', 'firstName lastName')
         .sort({ dueDate: 1 })
         .limit(8);
     }
@@ -265,14 +263,14 @@ export const getParentPortalData = async (req, res, next) => {
     // Child Report Cards
     const reportCards = await ReportCard.find({ studentId: activeChildId })
       .populate('examId', 'name examType term')
-      .populate('marks.subjectId', 'name code')
+      .populate('subjectsSummary.subjectId', 'name code')
       .sort({ createdAt: -1 })
       .limit(5);
 
     // Child Transport Stop
     const transport = await TransportAllocation.findOne({ studentId: activeChildId, status: 'Active' })
-      .populate('routeId', 'name routeNumber stops')
-      .populate('vehicleId', 'registrationNumber vehicleNumber driverName driverPhone');
+      .populate('routeId', 'routeName stops')
+      .populate('vehicleId', 'vehicleNumber model driver');
 
     // Parent Notices
     const notices = await Notice.find({
@@ -299,11 +297,11 @@ export const getParentPortalData = async (req, res, next) => {
             pendingBalance: pendingFeeBalance,
             invoices: feeInvoices,
           },
-          homeworkList,
+          homework: homeworkList,
           reportCards,
           transport,
+          notices,
         },
-        notices,
       },
     });
   } catch (error) {
@@ -312,7 +310,7 @@ export const getParentPortalData = async (req, res, next) => {
 };
 
 // ==========================================
-// 3. STUDENT DETAILED ATTENDANCE LOGS
+// 3. STUDENT DETAILED ATTENDANCE HISTORY
 // ==========================================
 
 export const getStudentAttendanceHistory = async (req, res, next) => {
@@ -323,7 +321,7 @@ export const getStudentAttendanceHistory = async (req, res, next) => {
     }
 
     const { month, year } = req.query;
-    let query = { studentId: student._id };
+    const query = { studentId: student._id };
 
     if (month && year) {
       const startDate = new Date(parseInt(year, 10), parseInt(month, 10) - 1, 1);
@@ -333,10 +331,8 @@ export const getStudentAttendanceHistory = async (req, res, next) => {
 
     const records = await Attendance.find(query).sort({ date: -1 });
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
-      studentId: student._id,
-      count: records.length,
       data: records,
     });
   } catch (error) {

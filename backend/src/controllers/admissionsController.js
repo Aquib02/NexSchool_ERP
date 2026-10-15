@@ -5,6 +5,7 @@ import Student from '../models/Student.js';
 import Parent from '../models/Parent.js';
 import Section from '../models/Section.js';
 import AcademicSession from '../models/AcademicSession.js';
+import { provisionStudentAndParentAccounts } from '../utils/accountProvisioner.js';
 
 // Helper to resolve or get active academic session
 const resolveSession = async (sessionId) => {
@@ -468,6 +469,14 @@ export const convertToStudent = async (req, res, next) => {
     application.convertedStudentId = student._id;
     await application.save();
 
+    // 6. Automatically generate student and father credentials
+    const credentials = await provisionStudentAndParentAccounts({
+      student,
+      parent,
+      studentEmail: student.contact?.email,
+      parentEmail: parent.fatherEmail || parent.email,
+    });
+
     res.status(201).json({
       success: true,
       message: `Applicant converted to Central Student (${student.studentId}) successfully`,
@@ -475,6 +484,7 @@ export const convertToStudent = async (req, res, next) => {
         student,
         parent,
         application,
+        credentials,
       },
     });
   } catch (error) {
