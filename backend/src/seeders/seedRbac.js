@@ -144,6 +144,16 @@ export const PERMISSIONS_DATA = [
   // Enterprise Module 7: AI & Predictive Analytics
   { resource: 'analytics', action: 'view', description: 'View AI predictive student retention and academic risk reports' },
   { resource: 'analytics', action: 'copilot', description: 'Access AI Copilot (lesson planner, quiz maker, remark assistant)' },
+
+  // Campus Notices & Circulars
+  { resource: 'notices', action: 'view', description: 'View campus circulars and official announcements' },
+  { resource: 'notices', action: 'create', description: 'Publish new campus notices and circulars' },
+  { resource: 'notices', action: 'update', description: 'Edit notices, change target audience, or pin announcements' },
+  { resource: 'notices', action: 'delete', description: 'Retract or delete circulars' },
+
+  // Dedicated Self-Service Portals
+  { resource: 'portal', action: 'student', description: 'Access student self-service portal (timetable, homework, marks)' },
+  { resource: 'portal', action: 'parent', description: 'Access parent portal (multi-child academic records, fees)' },
 ];
 
 export const seedRBAC = async () => {

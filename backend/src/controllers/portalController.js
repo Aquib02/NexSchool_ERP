@@ -14,16 +14,26 @@ const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'F
 
 // Helper to resolve student target (logged-in student, or admin/parent request)
 const resolveTargetStudent = async (req) => {
-  // STRICT DATA ISOLATION: If logged-in user is a student, strictly force their own student record
+  // STRICT DATA ISOLATION (Task 1):
+  // If logged-in user is a student, STRICTLY force their own student record.
+  // A student cannot specify a studentId query param to spy on other students.
   if (req.user?.role?.name === 'STUDENT') {
-    if (!req.user?.studentId) {
-      return null;
+    let student = null;
+    if (req.user?.studentId) {
+      student = await Student.findById(req.user.studentId)
+        .populate('classId', 'name code')
+        .populate('sectionId', 'name')
+        .populate('academicSessionId', 'name')
+        .populate('parentId', 'fatherName motherName primaryContactNumber');
     }
-    return await Student.findById(req.user.studentId)
-      .populate('classId', 'name code')
-      .populate('sectionId', 'name')
-      .populate('academicSessionId', 'name')
-      .populate('parentId', 'fatherName motherName primaryContactNumber');
+    if (!student && req.user?._id) {
+      student = await Student.findOne({ userId: req.user._id })
+        .populate('classId', 'name code')
+        .populate('sectionId', 'name')
+        .populate('academicSessionId', 'name')
+        .populate('parentId', 'fatherName motherName primaryContactNumber');
+    }
+    return student;
   }
 
   const { studentId } = req.query;
@@ -37,7 +47,7 @@ const resolveTargetStudent = async (req) => {
       .populate('parentId', 'fatherName motherName primaryContactNumber');
   }
 
-  // 2. If logged-in user has studentId (e.g. parent linked or other)
+  // 2. If logged-in user has studentId (e.g. staff with linked student profile)
   if (req.user?.studentId) {
     return await Student.findById(req.user.studentId)
       .populate('classId', 'name code')
@@ -73,7 +83,7 @@ export const getStudentPortalData = async (req, res, next) => {
     const classId = student.classId?._id;
     const sectionId = student.sectionId?._id;
 
-    // 1. Attendance Analytics
+    // 1. Attendance Analytics (strictly this student only)
     const attendanceRecords = await Attendance.find({ studentId }).sort({ date: -1 });
     const totalDays = attendanceRecords.length;
     const presentDays = attendanceRecords.filter((a) => a.status === 'Present').length;
@@ -82,37 +92,46 @@ export const getStudentPortalData = async (req, res, next) => {
     const attendancePercentage =
       totalDays > 0 ? Math.round(((presentDays + lateDays * 0.5) / totalDays) * 100) : 100;
 
-    // 2. Today's Timetable
+    // 2. Timetable (strictly for this student's class & section only)
     const todayDayName = DAYS_OF_WEEK[new Date().getDay()];
     let todaySchedule = [];
-    if (classId && sectionId) {
-      const timetable = await Timetable.findOne({ classId, sectionId, dayOfWeek: todayDayName })
-        .populate('periods.subjectId', 'name code')
-        .populate('periods.teacherId', 'firstName lastName');
+    let weeklyTimetable = [];
 
-      if (timetable && timetable.periods) {
-        todaySchedule = timetable.periods;
+    if (classId && sectionId) {
+      const [todayDoc, weekDocs] = await Promise.all([
+        Timetable.findOne({ classId, sectionId, dayOfWeek: todayDayName })
+          .populate('periods.subjectId', 'name code')
+          .populate('periods.teacherId', 'firstName lastName'),
+        Timetable.find({ classId, sectionId })
+          .populate('periods.subjectId', 'name code')
+          .populate('periods.teacherId', 'firstName lastName')
+          .sort({ dayOfWeek: 1 }),
+      ]);
+
+      if (todayDoc && todayDoc.periods) {
+        todaySchedule = todayDoc.periods;
       }
+      weeklyTimetable = weekDocs || [];
     }
 
-    // 3. Active Homework & Assignments
+    // 3. Active Homework & Assignments (strictly for this student's class & section only)
     let homeworkList = [];
     if (classId && sectionId) {
       homeworkList = await Homework.find({ classId, sectionId })
         .populate('subjectId', 'name code')
         .populate('assignedBy', 'firstName lastName')
         .sort({ dueDate: 1 })
-        .limit(10);
+        .limit(15);
     }
 
-    // 4. Latest Report Cards
+    // 4. Latest Report Cards (strictly this student only)
     const reportCards = await ReportCard.find({ studentId })
       .populate('examId', 'name examType term')
       .populate('subjectsSummary.subjectId', 'name code')
       .sort({ createdAt: -1 })
       .limit(5);
 
-    // 5. Fee Dues & Invoices
+    // 5. Fee Dues & Invoices (strictly this student only)
     const feeInvoices = await StudentFee.find({ studentId })
       .populate('feeStructureId', 'name')
       .sort({ dueDate: 1 });
@@ -121,15 +140,26 @@ export const getStudentPortalData = async (req, res, next) => {
     const totalPaid = feeInvoices.reduce((sum, f) => sum + (f.paidAmount || 0), 0);
     const pendingBalance = feeInvoices.reduce((sum, f) => sum + (f.balanceAmount || 0), 0);
 
-    // 6. Transport Allocation (if any)
+    // 6. Transport Allocation (strictly this student only)
     const transport = await TransportAllocation.findOne({ studentId, status: 'Active' })
       .populate('routeId', 'routeName stops')
       .populate('vehicleId', 'vehicleNumber model driver');
 
-    // 7. Targeted Notices
-    const notices = await Notice.find({
-      $or: [{ targetAudience: 'All' }, { targetAudience: 'Students' }],
-    })
+    // 7. Targeted Notices (strictly for Students and this student's class)
+    const noticeFilter = {
+      $and: [
+        { targetAudience: { $in: ['All', 'Students'] } },
+        {
+          $or: [
+            { targetClasses: { $exists: false } },
+            { targetClasses: { $size: 0 } },
+            ...(classId ? [{ targetClasses: classId }] : []),
+          ],
+        },
+      ],
+    };
+
+    const notices = await Notice.find(noticeFilter)
       .sort({ isPinned: -1, publishDate: -1 })
       .limit(6);
 
@@ -148,6 +178,7 @@ export const getStudentPortalData = async (req, res, next) => {
           latestGpa: reportCards[0]?.gpa || null,
         },
         todaySchedule,
+        weeklyTimetable,
         homeworkList,
         reportCards,
         feeInvoices,
@@ -173,46 +204,68 @@ export const getParentPortalData = async (req, res, next) => {
       });
     }
 
+    const isParentRole = req.user?.role?.name === 'PARENT';
     const { parentId, childId } = req.query;
 
     let parent = null;
 
-    // 1. Resolve parent profile
-    if (parentId && mongoose.Types.ObjectId.isValid(parentId)) {
-      parent = await Parent.findById(parentId).populate({
-        path: 'studentIds',
-        populate: [
-          { path: 'classId', select: 'name code' },
-          { path: 'sectionId', select: 'name' },
-        ],
-      });
-    } else if (req.user?.parentId) {
-      parent = await Parent.findById(req.user.parentId).populate({
-        path: 'studentIds',
-        populate: [
-          { path: 'classId', select: 'name code' },
-          { path: 'sectionId', select: 'name' },
-        ],
-      });
+    // STRICT DATA ISOLATION (Task 2):
+    // If the requester is a logged-in parent, STRICTLY bind to their own parent profile.
+    // They cannot pass arbitrary parentId query params to view other families.
+    if (isParentRole) {
+      if (req.user?.parentId) {
+        parent = await Parent.findById(req.user.parentId);
+      }
+      if (!parent && req.user?._id) {
+        parent = await Parent.findOne({ userId: req.user._id });
+      }
+      if (!parent && req.user?.username) {
+        // Fallback match by father phone/email if linked
+        parent = await Parent.findOne({
+          $or: [
+            { fatherEmail: req.user.email },
+            { primaryContactNumber: req.user.username },
+          ],
+        });
+      }
+
+      if (!parent) {
+        return res.status(404).json({
+          success: false,
+          message: 'No parent profile linked to your user account. Please contact school administration.',
+        });
+      }
     } else {
-      // Fallback: first parent with enrolled children for easy preview
-      parent = await Parent.findOne({ 'studentIds.0': { $exists: true } }).populate({
-        path: 'studentIds',
-        populate: [
-          { path: 'classId', select: 'name code' },
-          { path: 'sectionId', select: 'name' },
-        ],
-      });
+      // Staff / Admin preview mode
+      if (parentId && mongoose.Types.ObjectId.isValid(parentId)) {
+        parent = await Parent.findById(parentId);
+      } else if (req.user?.parentId) {
+        parent = await Parent.findById(req.user.parentId);
+      } else {
+        // Fallback: first parent with enrolled children for easy staff audit
+        parent = await Parent.findOne({ 'studentIds.0': { $exists: true } });
+      }
+
+      if (!parent) {
+        return res.status(404).json({
+          success: false,
+          message: 'No parent record found',
+        });
+      }
     }
 
-    if (!parent) {
-      return res.status(404).json({
-        success: false,
-        message: 'No parent record found',
-      });
-    }
+    // STRICT CHILDREN QUERY: Fetch ONLY the children belonging to this specific parent
+    const children = await Student.find({
+      $or: [
+        { parentId: parent._id },
+        { _id: { $in: parent.studentIds || [] } },
+      ],
+      status: { $ne: 'Archived' },
+    })
+      .populate('classId', 'name code')
+      .populate('sectionId', 'name')
+      .populate('academicSessionId', 'name');
 
-    const children = parent.studentIds || [];
     if (children.length === 0) {
       return res.status(200).json({
         success: true,
@@ -225,17 +278,21 @@ export const getParentPortalData = async (req, res, next) => {
     }
 
     // Determine active selected child
+    // If childId query param is supplied, verify it STRICTLY belongs to this parent's children
     let activeChild = children[0];
     if (childId && mongoose.Types.ObjectId.isValid(childId)) {
-      const found = children.find((c) => c._id.toString() === childId);
-      if (found) activeChild = found;
+      const found = children.find((c) => c._id.toString() === childId.toString());
+      if (found) {
+        activeChild = found;
+      }
+      // If not found in children list, activeChild safely remains children[0]
     }
 
     const activeChildId = activeChild._id;
     const classId = activeChild.classId?._id;
     const sectionId = activeChild.sectionId?._id;
 
-    // Child Attendance
+    // Child Attendance (strictly for active child)
     const attendanceRecords = await Attendance.find({ studentId: activeChildId }).sort({ date: -1 });
     const totalDays = attendanceRecords.length;
     const presentDays = attendanceRecords.filter((a) => a.status === 'Present').length;
@@ -244,38 +301,49 @@ export const getParentPortalData = async (req, res, next) => {
     const attendancePercentage =
       totalDays > 0 ? Math.round(((presentDays + lateDays * 0.5) / totalDays) * 100) : 100;
 
-    // Child Fees
+    // Child Fees (strictly for active child)
     const feeInvoices = await StudentFee.find({ studentId: activeChildId })
       .populate('feeStructureId', 'name')
       .sort({ dueDate: 1 });
     const pendingFeeBalance = feeInvoices.reduce((sum, f) => sum + (f.balanceAmount || 0), 0);
 
-    // Child Homework
+    // Child Homework (strictly for active child's class and section)
     let homeworkList = [];
     if (classId && sectionId) {
       homeworkList = await Homework.find({ classId, sectionId })
         .populate('subjectId', 'name code')
         .populate('assignedBy', 'firstName lastName')
         .sort({ dueDate: 1 })
-        .limit(8);
+        .limit(10);
     }
 
-    // Child Report Cards
+    // Child Report Cards (strictly for active child)
     const reportCards = await ReportCard.find({ studentId: activeChildId })
       .populate('examId', 'name examType term')
       .populate('subjectsSummary.subjectId', 'name code')
       .sort({ createdAt: -1 })
       .limit(5);
 
-    // Child Transport Stop
+    // Child Transport Stop (strictly for active child)
     const transport = await TransportAllocation.findOne({ studentId: activeChildId, status: 'Active' })
       .populate('routeId', 'routeName stops')
       .populate('vehicleId', 'vehicleNumber model driver');
 
-    // Parent Notices
-    const notices = await Notice.find({
-      $or: [{ targetAudience: 'All' }, { targetAudience: 'Parents' }],
-    })
+    // Parent Notices (strictly matching Parents audience & class if specified)
+    const noticeFilter = {
+      $and: [
+        { targetAudience: { $in: ['All', 'Parents'] } },
+        {
+          $or: [
+            { targetClasses: { $exists: false } },
+            { targetClasses: { $size: 0 } },
+            ...(classId ? [{ targetClasses: classId }] : []),
+          ],
+        },
+      ],
+    };
+
+    const notices = await Notice.find(noticeFilter)
       .sort({ isPinned: -1, publishDate: -1 })
       .limit(6);
 

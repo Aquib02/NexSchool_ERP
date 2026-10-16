@@ -38,6 +38,11 @@ export const StudentPortalPage = () => {
   const [loading, setLoading] = useState(true);
   const [portalData, setPortalData] = useState(null);
   const [activeTab, setActiveTab] = useState('overview'); // overview, timetable, homework, academics, fees, attendance
+  const [selectedTimetableDay, setSelectedTimetableDay] = useState(
+    ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()] === 'Sunday'
+      ? 'Monday'
+      : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()]
+  );
   const [attendanceHistory, setAttendanceHistory] = useState([]);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -510,11 +515,17 @@ export const StudentPortalPage = () => {
       {/* Timetable Tab */}
       {activeTab === 'timetable' && (
         <Card className="p-6">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-lg">
+                  {student.classId?.name} • Section {student.sectionId?.name}
+                </span>
+                <span className="text-xs text-slate-400 font-medium">Your Enrolled Class</span>
+              </div>
               <h3 className="text-lg font-bold text-slate-800">Class Timetable & Schedule</h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Standard weekly timetable for {student.classId?.name} - Section {student.sectionId?.name}
+                Official weekly timetable restricted strictly to your assigned class and section.
               </p>
             </div>
             <Button size="sm" variant="secondary" icon={Download} onClick={() => window.print()}>
@@ -522,30 +533,77 @@ export const StudentPortalPage = () => {
             </Button>
           </div>
 
-          {todaySchedule && todaySchedule.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {todaySchedule.map((p, idx) => (
-                <div key={idx} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 hover:border-indigo-300 transition-all">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="px-2 py-0.5 rounded text-xs font-bold bg-indigo-100 text-indigo-800">
-                      Period {p.periodNumber || idx + 1}
-                    </span>
-                    <span className="text-xs font-semibold text-slate-500">
-                      {p.startTime} - {p.endTime}
-                    </span>
+          {/* Day of Week Selector */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-5 border-b border-slate-100">
+            {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day) => {
+              const isSelected = selectedTimetableDay === day;
+              const hasClasses = (portalData.weeklyTimetable || []).some(
+                (w) => w.dayOfWeek === day && w.periods?.length > 0
+              );
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => setSelectedTimetableDay(day)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                    isSelected
+                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30'
+                      : hasClasses
+                      ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      : 'bg-slate-50 text-slate-400 hover:bg-slate-100'
+                  }`}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+
+          {(() => {
+            const dayDoc = (portalData.weeklyTimetable || []).find(
+              (w) => w.dayOfWeek === selectedTimetableDay
+            );
+            const periods = dayDoc?.periods?.length
+              ? dayDoc.periods
+              : selectedTimetableDay === ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()]
+              ? todaySchedule
+              : [];
+
+            return periods && periods.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {periods.map((p, idx) => (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-2xl bg-slate-50 border border-slate-200 hover:border-indigo-300 transition-all"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="px-2 py-0.5 rounded text-xs font-bold bg-indigo-100 text-indigo-800">
+                        Period {p.periodNumber || idx + 1}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-500">
+                        {p.startTime} - {p.endTime}
+                      </span>
+                    </div>
+                    <h4 className="font-bold text-slate-800 text-base mb-1">
+                      {p.subjectId?.name || 'Subject'}
+                    </h4>
+                    <p className="text-xs text-slate-500">
+                      Instructor:{' '}
+                      {p.teacherId
+                        ? `Prof. ${p.teacherId.firstName} ${p.teacherId.lastName}`
+                        : 'Assigned Faculty'}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">Room: {p.roomNumber || 'General Wing'}</p>
                   </div>
-                  <h4 className="font-bold text-slate-800 text-base mb-1">{p.subjectId?.name || 'Subject'}</h4>
-                  <p className="text-xs text-slate-500">Instructor: {p.teacherId ? `${p.teacherId.firstName} ${p.teacherId.lastName}` : 'Assigned Staff'}</p>
-                  <p className="text-xs text-slate-400 mt-1">Location: Room {p.roomNumber || 'General Wing'}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              title="No Timetable Configured"
-              description="The academic timetable for this class and section has not been published yet."
-            />
-          )}
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                title={`No Classes for ${selectedTimetableDay}`}
+                description={`No scheduled periods configured for ${selectedTimetableDay} in ${student.classId?.name} (Section ${student.sectionId?.name}).`}
+              />
+            );
+          })()}
         </Card>
       )}
 
