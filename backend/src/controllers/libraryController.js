@@ -17,6 +17,12 @@ const generateTransactionNumber = () => {
 
 export const createBook = async (req, res, next) => {
   try {
+    if (req.user?.role?.name === 'STUDENT') {
+      return res.status(403).json({
+        success: false,
+        message: 'Students are not authorized to catalog books.',
+      });
+    }
     const {
       title,
       author,
@@ -116,6 +122,12 @@ export const getBookById = async (req, res, next) => {
 
 export const updateBook = async (req, res, next) => {
   try {
+    if (req.user?.role?.name === 'STUDENT') {
+      return res.status(403).json({
+        success: false,
+        message: 'Students are not authorized to update books.',
+      });
+    }
     const { id } = req.params;
     const { title, author, category, isbn, totalCopies, rackLocation, price } = req.body;
 
@@ -152,6 +164,12 @@ export const updateBook = async (req, res, next) => {
 
 export const deleteBook = async (req, res, next) => {
   try {
+    if (req.user?.role?.name === 'STUDENT') {
+      return res.status(403).json({
+        success: false,
+        message: 'Students are not authorized to delete books.',
+      });
+    }
     const { id } = req.params;
     const book = await Book.findById(id);
     if (!book) {
@@ -180,6 +198,12 @@ export const deleteBook = async (req, res, next) => {
 
 export const issueBook = async (req, res, next) => {
   try {
+    if (req.user?.role?.name === 'STUDENT') {
+      return res.status(403).json({
+        success: false,
+        message: 'Students are not authorized to issue library books.',
+      });
+    }
     const { bookId, patronType = 'Student', studentId, employeeId, dueDate, remarks } = req.body;
 
     if (!bookId || (!studentId && !employeeId)) {
@@ -244,6 +268,12 @@ export const issueBook = async (req, res, next) => {
 
 export const returnBook = async (req, res, next) => {
   try {
+    if (req.user?.role?.name === 'STUDENT') {
+      return res.status(403).json({
+        success: false,
+        message: 'Students are not authorized to process book returns.',
+      });
+    }
     const { id } = req.params;
     const { finePaid = false, remarks } = req.body;
 
@@ -303,8 +333,16 @@ export const getTransactions = async (req, res, next) => {
     const { status, studentId, employeeId, bookId, page = 1, limit = 50 } = req.query;
     const filter = {};
 
-    if (status) filter.status = status;
-    if (studentId) filter.studentId = studentId;
+    if (req.user?.role?.name === 'STUDENT') {
+      let resolvedStudentId = req.user.studentId;
+      if (!resolvedStudentId && req.user._id) {
+        const sDoc = await Student.findOne({ userId: req.user._id });
+        if (sDoc) resolvedStudentId = sDoc._id;
+      }
+      filter.studentId = resolvedStudentId;
+    } else {
+      if (studentId) filter.studentId = studentId;
+    }
     if (employeeId) filter.employeeId = employeeId;
     if (bookId) filter.bookId = bookId;
 

@@ -40,7 +40,13 @@ export const loginUser = async ({ username, password }) => {
       },
     })
     .populate('employeeId')
-    .populate('studentId')
+    .populate({
+      path: 'studentId',
+      populate: [
+        { path: 'classId', select: 'name code' },
+        { path: 'sectionId', select: 'name' },
+      ],
+    })
     .populate('parentId')
     .select('+password');
 
@@ -68,6 +74,15 @@ export const loginUser = async ({ username, password }) => {
   delete sanitizedUser.password;
   delete sanitizedUser.passwordResetToken;
   delete sanitizedUser.passwordResetExpires;
+
+  if (!sanitizedUser.studentId && (user.role?.name === 'STUDENT')) {
+    const sDoc = await Student.findOne({ userId: user._id })
+      .populate('classId', 'name code')
+      .populate('sectionId', 'name');
+    if (sDoc) {
+      sanitizedUser.studentId = sDoc;
+    }
+  }
 
   return { user: sanitizedUser, ...tokens };
 };
@@ -213,14 +228,30 @@ export const getUserProfile = async (userId) => {
       },
     })
     .populate('employeeId')
-    .populate('studentId')
+    .populate({
+      path: 'studentId',
+      populate: [
+        { path: 'classId', select: 'name code' },
+        { path: 'sectionId', select: 'name' },
+      ],
+    })
     .populate('parentId');
 
   if (!user) {
     throw ApiError.notFound('User profile not found');
   }
 
-  return user;
+  const userObj = user.toObject();
+  if (!userObj.studentId && user.role?.name === 'STUDENT') {
+    const sDoc = await Student.findOne({ userId: user._id })
+      .populate('classId', 'name code')
+      .populate('sectionId', 'name');
+    if (sDoc) {
+      userObj.studentId = sDoc;
+    }
+  }
+
+  return userObj;
 };
 
 export const updateUserProfile = async (userId, { email }) => {

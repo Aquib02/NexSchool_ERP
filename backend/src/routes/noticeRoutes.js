@@ -12,6 +12,12 @@ const canManageNotices = (action) => {
     if (!req.user || !req.user.role) {
       return res.status(401).json({ success: false, message: 'User not authenticated' });
     }
+    if (req.user.role.name === 'STUDENT') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied: Students are not authorized to publish or manage notices.',
+      });
+    }
     if (req.user.role.name === 'SUPER_ADMIN') {
       return next();
     }

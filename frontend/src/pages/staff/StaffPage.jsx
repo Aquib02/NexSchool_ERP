@@ -79,6 +79,15 @@ export const StaffPage = () => {
   const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
   const [deptForm, setDeptForm] = useState({ name: '', code: '', description: '' });
 
+  const [isDesigModalOpen, setIsDesigModalOpen] = useState(false);
+  const [desigForm, setDesigForm] = useState({
+    title: '',
+    code: '',
+    departmentId: '',
+    description: '',
+    codeManual: false,
+  });
+
   const [banner, setBanner] = useState({ type: '', text: '' });
   const showBanner = (type, text) => {
     setBanner({ type, text });
@@ -235,6 +244,42 @@ export const StaffPage = () => {
     }
   };
 
+  const handleCreateDesig = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await staffService.createDesignation({
+        title: desigForm.title.trim(),
+        code: desigForm.code.trim().toUpperCase(),
+        departmentId: desigForm.departmentId,
+        description: desigForm.description?.trim(),
+      });
+      showBanner('success', `Designation "${desigForm.title}" created successfully.`);
+      setIsDesigModalOpen(false);
+
+      // Auto-select in employee registration form if open
+      if (res.data?.data?._id) {
+        const created = res.data.data;
+        setEmployeeForm((prev) => ({
+          ...prev,
+          departmentId: desigForm.departmentId || prev.departmentId,
+          designationId: created._id,
+        }));
+      }
+
+      setDesigForm({ title: '', code: '', departmentId: '', description: '', codeManual: false });
+      loadDepartmentsAndDesignations();
+    } catch (err) {
+      showBanner('error', err.response?.data?.message || 'Failed to create designation.');
+    }
+  };
+
+  const filteredDesignations = employeeForm.departmentId
+    ? designations.filter((d) => {
+        const dDeptId = d.departmentId?._id || d.departmentId;
+        return dDeptId?.toString() === employeeForm.departmentId?.toString();
+      })
+    : designations;
+
   return (
     <div className="space-y-6">
       {banner.text && (
@@ -282,6 +327,22 @@ export const StaffPage = () => {
             + Department
           </Button>
           <Button
+            variant="secondary"
+            onClick={() => {
+              setDesigForm({
+                title: '',
+                code: '',
+                departmentId: departments[0]?._id || '',
+                description: '',
+                codeManual: false,
+              });
+              setIsDesigModalOpen(true);
+            }}
+            icon={<Briefcase className="w-4 h-4" />}
+          >
+            + Designation
+          </Button>
+          <Button
             variant="primary"
             onClick={() => setIsEmployeeModalOpen(true)}
             icon={<Plus className="w-4 h-4" />}
@@ -292,9 +353,10 @@ export const StaffPage = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-2">
+      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
         {[
           { id: 'directory', label: 'Employee Directory', icon: Users },
+          { id: 'departments', label: 'Departments & Roles', icon: Building2 },
           { id: 'leaves', label: 'Staff Leaves', icon: Calendar },
           { id: 'payroll', label: 'Monthly Payroll', icon: DollarSign },
         ].map((tab) => {
@@ -646,6 +708,123 @@ export const StaffPage = () => {
       )}
 
       {/* ========================================================================= */}
+      {/* 4. DEPARTMENTS & DESIGNATIONS */}
+      {/* ========================================================================= */}
+      {!loading && activeTab === 'departments' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-indigo-600" />
+                School Organizational Structure & Designations
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Manage institutional departments, faculty job titles, and administrative designations.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setIsDeptModalOpen(true)}
+                icon={<Building2 className="w-3.5 h-3.5" />}
+              >
+                + New Department
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setDesigForm({
+                    title: '',
+                    code: '',
+                    departmentId: departments[0]?._id || '',
+                    description: '',
+                    codeManual: false,
+                  });
+                  setIsDesigModalOpen(true);
+                }}
+                icon={<Plus className="w-3.5 h-3.5" />}
+              >
+                + New Designation
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {departments.map((dept) => {
+              const deptDesigs = designations.filter((d) => {
+                const dDeptId = d.departmentId?._id || d.departmentId;
+                return dDeptId?.toString() === dept._id?.toString();
+              });
+
+              return (
+                <Card key={dept._id} className="p-5 flex flex-col justify-between border-slate-200 hover:border-indigo-300 transition-all bg-white shadow-xs">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        {dept.code}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-400">
+                        {deptDesigs.length} {deptDesigs.length === 1 ? 'Designation' : 'Designations'}
+                      </span>
+                    </div>
+                    <h3 className="text-base font-bold text-slate-900">{dept.name}</h3>
+                    {dept.description && (
+                      <p className="text-xs text-slate-500 mt-1 line-clamp-2">{dept.description}</p>
+                    )}
+
+                    <div className="mt-4 pt-3 border-t border-slate-100">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+                        Assigned Designations
+                      </div>
+                      {deptDesigs.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {deptDesigs.map((des) => (
+                            <span
+                              key={des._id}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-xs font-medium"
+                              title={des.description || des.title}
+                            >
+                              <Briefcase className="w-3 h-3 text-slate-400" />
+                              <span>{des.title}</span>
+                              <span className="text-[10px] font-mono text-slate-400">({des.code})</span>
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 italic">No designations added to this department yet.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDesigForm({
+                          title: '',
+                          code: '',
+                          departmentId: dept._id,
+                          description: '',
+                          codeManual: false,
+                        });
+                        setIsDesigModalOpen(true);
+                      }}
+                      className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add Designation to {dept.code}
+                    </button>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* MODAL: HIRE EMPLOYEE */}
       {/* ========================================================================= */}
       <Modal
@@ -702,36 +881,88 @@ export const StaffPage = () => {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Department *</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-slate-600">Department *</label>
+                <button
+                  type="button"
+                  onClick={() => setIsDeptModalOpen(true)}
+                  className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5 cursor-pointer"
+                  title="Create a new department"
+                >
+                  <Plus className="w-3 h-3" /> Add Dept
+                </button>
+              </div>
               <select
                 required
                 value={employeeForm.departmentId}
-                onChange={(e) => setEmployeeForm({ ...employeeForm, departmentId: e.target.value })}
+                onChange={(e) => {
+                  const newDeptId = e.target.value;
+                  const currentDesig = designations.find((d) => d._id === employeeForm.designationId);
+                  const desigDeptId = currentDesig?.departmentId?._id || currentDesig?.departmentId;
+                  setEmployeeForm({
+                    ...employeeForm,
+                    departmentId: newDeptId,
+                    designationId: newDeptId && desigDeptId?.toString() !== newDeptId?.toString() ? '' : employeeForm.designationId,
+                  });
+                }}
                 className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 bg-white"
               >
                 <option value="">Select Department</option>
                 {departments.map((d) => (
                   <option key={d._id} value={d._id}>
-                    {d.name}
+                    {d.name} ({d.code})
                   </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Designation *</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-slate-600">Designation *</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDesigForm({
+                      title: '',
+                      code: '',
+                      departmentId: employeeForm.departmentId || (departments[0]?._id || ''),
+                      description: '',
+                      codeManual: false,
+                    });
+                    setIsDesigModalOpen(true);
+                  }}
+                  className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5 cursor-pointer"
+                  title="Define a new designation/job title"
+                >
+                  <Plus className="w-3 h-3" /> Add Designation
+                </button>
+              </div>
               <select
                 required
                 value={employeeForm.designationId}
-                onChange={(e) => setEmployeeForm({ ...employeeForm, designationId: e.target.value })}
+                onChange={(e) => {
+                  const selId = e.target.value;
+                  const chosenDesig = designations.find((d) => d._id === selId);
+                  const desigDeptId = chosenDesig?.departmentId?._id || chosenDesig?.departmentId;
+                  setEmployeeForm({
+                    ...employeeForm,
+                    designationId: selId,
+                    departmentId: (!employeeForm.departmentId && desigDeptId) ? desigDeptId : employeeForm.departmentId,
+                  });
+                }}
                 className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 bg-white"
               >
                 <option value="">Select Designation</option>
-                {designations.map((d) => (
+                {filteredDesignations.map((d) => (
                   <option key={d._id} value={d._id}>
-                    {d.title}
+                    {d.title} {!employeeForm.departmentId && d.departmentId?.name ? `(${d.departmentId.name})` : ''}
                   </option>
                 ))}
               </select>
+              {filteredDesignations.length === 0 && employeeForm.departmentId && (
+                <p className="text-[11px] text-amber-600 mt-1">
+                  No designations in this department yet. Click "+ Add Designation" above.
+                </p>
+              )}
             </div>
           </div>
 
@@ -928,6 +1159,98 @@ export const StaffPage = () => {
             </Button>
             <Button variant="primary" type="submit">
               Create Department
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ========================================================================= */}
+      {/* MODAL: CREATE DESIGNATION */}
+      {/* ========================================================================= */}
+      <Modal
+        isOpen={isDesigModalOpen}
+        onClose={() => setIsDesigModalOpen(false)}
+        title="Create School Designation / Job Title"
+      >
+        <form onSubmit={handleCreateDesig} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">
+              Select Department *
+            </label>
+            <select
+              required
+              value={desigForm.departmentId}
+              onChange={(e) => setDesigForm({ ...desigForm, departmentId: e.target.value })}
+              className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 bg-white"
+            >
+              <option value="">Select Department</option>
+              {departments.map((d) => (
+                <option key={d._id} value={d._id}>
+                  {d.name} ({d.code})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">
+              Designation Title *
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Senior Physics Faculty, Chief Librarian, Sports Coach"
+              value={desigForm.title}
+              onChange={(e) => {
+                const titleVal = e.target.value;
+                setDesigForm({
+                  ...desigForm,
+                  title: titleVal,
+                  code: desigForm.codeManual
+                    ? desigForm.code
+                    : titleVal.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase(),
+                });
+              }}
+              className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">
+              Designation Code *
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. PHYS, LIBR, TCHR"
+              value={desigForm.code}
+              onChange={(e) =>
+                setDesigForm({ ...desigForm, code: e.target.value.toUpperCase(), codeManual: true })
+              }
+              className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 font-mono uppercase"
+            />
+            <p className="text-[11px] text-slate-400 mt-1">Short uppercase code used in payroll, IDs, and reports.</p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">
+              Role Description (Optional)
+            </label>
+            <textarea
+              rows={2}
+              placeholder="Responsibilities, scope, or qualifications for this position..."
+              value={desigForm.description}
+              onChange={(e) => setDesigForm({ ...desigForm, description: e.target.value })}
+              className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <Button variant="secondary" onClick={() => setIsDesigModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit" icon={<Plus className="w-4 h-4" />}>
+              Save Designation
             </Button>
           </div>
         </form>

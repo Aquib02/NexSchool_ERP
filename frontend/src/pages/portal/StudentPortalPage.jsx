@@ -20,14 +20,17 @@ import {
   AlertCircle,
   RefreshCw,
   ShieldCheck,
+  Edit3,
 } from 'lucide-react';
 import Card from '../../components/common/Card.jsx';
 import Button from '../../components/common/Button.jsx';
 import Badge from '../../components/common/Badge.jsx';
 import LoadingSpinner from '../../components/common/LoadingSpinner.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
+import Modal from '../../components/common/Modal.jsx';
 import portalService from '../../services/portalService.js';
 import studentService from '../../services/studentService.js';
+import academicsService from '../../services/academicsService.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 
 export const StudentPortalPage = () => {
@@ -43,6 +46,14 @@ export const StudentPortalPage = () => {
       ? 'Monday'
       : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()]
   );
+
+  // Homework Submission Modal State
+  const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
+  const [selectedHwToSubmit, setSelectedHwToSubmit] = useState(null);
+  const [submissionContent, setSubmissionContent] = useState('');
+  const [submissionFileUrl, setSubmissionFileUrl] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitSuccessMsg, setSubmitSuccessMsg] = useState('');
   const [attendanceHistory, setAttendanceHistory] = useState([]);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -85,6 +96,49 @@ export const StudentPortalPage = () => {
       console.error('Failed to load attendance logs:', err);
     } finally {
       setAttendanceLoading(false);
+    }
+  };
+
+  const handleOpenSubmitModal = (hw) => {
+    setSelectedHwToSubmit(hw);
+    const activeStudentId = portalData?.student?._id || user?.studentId?._id || user?.studentId;
+    const existingSub = hw.submissions?.find((s) => {
+      const sid = s.studentId?._id || s.studentId;
+      return sid?.toString() === activeStudentId?.toString();
+    });
+
+    if (existingSub) {
+      setSubmissionContent(existingSub.content || '');
+      setSubmissionFileUrl(existingSub.fileUrl || '');
+    } else {
+      setSubmissionContent('');
+      setSubmissionFileUrl('');
+    }
+    setSubmitSuccessMsg('');
+    setIsSubmitModalOpen(true);
+  };
+
+  const handleSubmitHomework = async (e) => {
+    e.preventDefault();
+    if (!selectedHwToSubmit) return;
+    setIsSubmitting(true);
+    setSubmitSuccessMsg('');
+    try {
+      await academicsService.submitHomework(selectedHwToSubmit._id, {
+        content: submissionContent.trim() || 'Completed task',
+        fileUrl: submissionFileUrl.trim() || undefined,
+      });
+      setSubmitSuccessMsg(`✓ Task "${selectedHwToSubmit.title}" marked as completed and synced with your teacher's portal!`);
+      setIsSubmitModalOpen(false);
+      setSelectedHwToSubmit(null);
+      setSubmissionContent('');
+      setSubmissionFileUrl('');
+      // Refresh student portal data
+      fetchPortalData(selectedStudentId || undefined);
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || 'Failed to submit homework');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -610,26 +664,45 @@ export const StudentPortalPage = () => {
       {/* Homework Tab */}
       {activeTab === 'homework' && (
         <Card className="p-6">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
             <div>
               <h3 className="text-lg font-bold text-slate-800">Assigned Coursework & Homework</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Track your assignments and upcoming submission deadlines</p>
+              <p className="text-xs text-slate-500 mt-0.5">Track your assignments, complete tasks, and review grades</p>
             </div>
+            {submitSuccessMsg && (
+              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl shadow-xs">
+                {submitSuccessMsg}
+              </span>
+            )}
           </div>
 
           {homeworkList.length > 0 ? (
             <div className="space-y-4">
               {homeworkList.map((hw) => {
                 const isOverdue = new Date(hw.dueDate) < new Date();
+                const activeStudentId = portalData?.student?._id || user?.studentId?._id || user?.studentId;
+                const mySub = hw.submissions?.find((s) => {
+                  const sid = s.studentId?._id || s.studentId;
+                  return sid?.toString() === activeStudentId?.toString();
+                });
+                const isCompleted = !!mySub;
+
                 return (
                   <div
                     key={hw._id}
-                    className="p-5 rounded-2xl bg-white border border-slate-200 hover:border-indigo-200 shadow-xs transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
+                    className={`p-5 rounded-2xl bg-white border transition-all flex flex-col md:flex-row md:items-start justify-between gap-4 ${
+                      isCompleted
+                        ? 'border-emerald-200 bg-emerald-50/20'
+                        : 'border-slate-200 hover:border-indigo-200 shadow-xs'
+                    }`}
                   >
-                    <div className="space-y-1.5 max-w-2xl">
+                    <div className="space-y-1.5 max-w-2xl flex-1">
                       <div className="flex items-center gap-2">
                         <Badge variant="primary">{hw.subjectId?.name || 'Subject'}</Badge>
                         <span className="text-xs font-medium text-slate-400">Max Marks: {hw.maxMarks || 20}</span>
+                        <Badge variant={isCompleted ? 'success' : isOverdue ? 'danger' : 'warning'}>
+                          {isCompleted ? '✓ Completed' : isOverdue ? 'Overdue' : 'Pending'}
+                        </Badge>
                       </div>
                       <h4 className="text-base font-bold text-slate-900">{hw.title}</h4>
                       <p className="text-sm text-slate-600 leading-relaxed">{hw.description}</p>
@@ -638,18 +711,70 @@ export const StudentPortalPage = () => {
                           Note: {hw.instructions}
                         </p>
                       )}
+
+                      {/* Submitted Solution & Teacher Feedback Block */}
+                      {isCompleted && (
+                        <div className="mt-3 p-3.5 rounded-xl bg-emerald-50/90 border border-emerald-200/80 text-xs space-y-1.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-emerald-800 font-bold">
+                            <span>✓ Submitted on {new Date(mySub.submittedAt).toLocaleString()}</span>
+                            {mySub.status === 'Graded' && (
+                              <span className="bg-emerald-600 text-white px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+                                Grade Score: {mySub.marksAwarded} / {hw.maxMarks || 20}
+                              </span>
+                            )}
+                          </div>
+                          {mySub.content && (
+                            <p className="text-slate-700 font-normal">
+                              <span className="font-semibold text-slate-800">Your solution notes:</span> "{mySub.content}"
+                            </p>
+                          )}
+                          {mySub.fileUrl && (
+                            <div>
+                              <a
+                                href={mySub.fileUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-indigo-600 hover:underline font-semibold inline-flex items-center gap-1"
+                              >
+                                <span>Attached solution link / file</span> ↗
+                              </a>
+                            </div>
+                          )}
+                          {mySub.teacherFeedback && (
+                            <div className="mt-2 p-2.5 bg-white rounded-lg border border-emerald-300 text-slate-800">
+                              <span className="font-bold text-indigo-700">Teacher Feedback:</span> {mySub.teacherFeedback}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <div className="text-right shrink-0 flex flex-col items-end gap-2">
-                      <span
-                        className={`text-xs font-bold px-3 py-1 rounded-full border ${
-                          isOverdue
-                            ? 'bg-rose-50 text-rose-700 border-rose-200'
-                            : 'bg-amber-50 text-amber-700 border-amber-200'
-                        }`}
+
+                    <div className="shrink-0 flex flex-col md:items-end gap-3 self-start md:self-center">
+                      <div className="text-right">
+                        <span
+                          className={`text-xs font-bold px-3 py-1 rounded-full border ${
+                            isCompleted
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : isOverdue
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}
+                        >
+                          {isCompleted ? 'Submitted to Teacher' : isOverdue ? 'Overdue Deadline' : 'Upcoming Deadline'}
+                        </span>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Due: {new Date(hw.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
+                      </div>
+
+                      <Button
+                        variant={isCompleted ? 'secondary' : 'primary'}
+                        size="sm"
+                        icon={isCompleted ? Edit3 : CheckCircle2}
+                        onClick={() => handleOpenSubmitModal(hw)}
                       >
-                        {isOverdue ? 'Overdue Deadline' : 'Upcoming Deadline'}
-                      </span>
-                      <p className="text-xs text-slate-500">Due: {new Date(hw.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                        {isCompleted ? 'Update Submission' : 'Complete Task'}
+                      </Button>
                     </div>
                   </div>
                 );
@@ -865,6 +990,82 @@ export const StudentPortalPage = () => {
           )}
         </Card>
       )}
+
+      {/* STUDENT HOMEWORK SUBMISSION MODAL */}
+      <Modal
+        isOpen={isSubmitModalOpen}
+        onClose={() => {
+          setIsSubmitModalOpen(false);
+          setSelectedHwToSubmit(null);
+        }}
+        title={`Submit Task: ${selectedHwToSubmit?.title || 'Homework'}`}
+      >
+        {selectedHwToSubmit && (
+          <form onSubmit={handleSubmitHomework} className="space-y-4 text-xs">
+            <div className="p-3.5 bg-indigo-50/70 border border-indigo-200/60 rounded-xl space-y-1">
+              <div className="flex items-center justify-between">
+                <Badge variant="primary">{selectedHwToSubmit.subjectId?.name || 'Subject'}</Badge>
+                <span className="text-slate-500 font-medium">
+                  Due: {new Date(selectedHwToSubmit.dueDate).toLocaleDateString()}
+                </span>
+              </div>
+              <h4 className="font-bold text-slate-800 text-sm mt-1">{selectedHwToSubmit.title}</h4>
+              <p className="text-slate-600 text-xs">{selectedHwToSubmit.description}</p>
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Your Solution / Notes / Answers *
+              </label>
+              <textarea
+                required
+                rows={4}
+                value={submissionContent}
+                onChange={(e) => setSubmissionContent(e.target.value)}
+                placeholder="Write your completed task answers, solution summary, or completion notes here..."
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-hidden focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Attachment / Project Link (Optional)
+              </label>
+              <input
+                type="text"
+                value={submissionFileUrl}
+                onChange={(e) => setSubmissionFileUrl(e.target.value)}
+                placeholder="https://drive.google.com/... or /documents/solution.pdf"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-[11px]"
+              />
+              <span className="text-[11px] text-slate-400 mt-1 block">
+                Provide a shareable link or file URL for your teacher to review.
+              </span>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setIsSubmitModalOpen(false);
+                  setSelectedHwToSubmit(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                icon={CheckCircle2}
+                isLoading={isSubmitting}
+              >
+                Submit & Mark Completed
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 };

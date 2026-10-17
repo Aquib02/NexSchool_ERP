@@ -15,7 +15,30 @@ export const getNotices = async (req, res, next) => {
     if (category && category !== 'All') {
       query.category = category;
     }
-    if (targetAudience && targetAudience !== 'All') {
+
+    // Role-based Audience Scoping: Students only see notices meant for them
+    if (req.user?.role?.name === 'STUDENT') {
+      query.targetAudience = { $in: ['All', 'Students'] };
+
+      let student = null;
+      if (req.user.studentId) {
+        student = await mongoose.model('Student').findById(req.user.studentId);
+      }
+      if (!student) {
+        student = await mongoose.model('Student').findOne({ userId: req.user._id });
+      }
+
+      if (student?.classId) {
+        query.$and = query.$and || [];
+        query.$and.push({
+          $or: [
+            { targetClasses: { $exists: false } },
+            { targetClasses: { $size: 0 } },
+            { targetClasses: student.classId },
+          ],
+        });
+      }
+    } else if (targetAudience && targetAudience !== 'All') {
       query.$or = [{ targetAudience: 'All' }, { targetAudience: targetAudience }];
     }
     if (isPinned === 'true') {
@@ -85,6 +108,13 @@ export const createNotice = async (req, res, next) => {
       attachmentUrl,
       isPinned = false,
     } = req.body;
+
+    if (req.user?.role?.name === 'STUDENT') {
+      return res.status(403).json({
+        success: false,
+        message: 'Students are not authorized to publish campus notices or circulars',
+      });
+    }
 
     if (!title || !content) {
       return res.status(400).json({

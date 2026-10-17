@@ -25,8 +25,11 @@ import LoadingSpinner from '../../components/common/LoadingSpinner.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
 import libraryService from '../../services/libraryService.js';
 import studentService from '../../services/studentService.js';
+import { useAuth } from '../../context/AuthContext.jsx';
 
 export const LibraryPage = () => {
+  const { user } = useAuth();
+  const isStudent = user?.role?.name === 'STUDENT';
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'catalog');
   const [loading, setLoading] = useState(false);
@@ -114,8 +117,10 @@ export const LibraryPage = () => {
   };
 
   useEffect(() => {
-    loadStudents();
-  }, []);
+    if (!isStudent) {
+      loadStudents();
+    }
+  }, [isStudent]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -209,44 +214,50 @@ export const LibraryPage = () => {
             <Badge variant="primary">Phase 8</Badge>
           </div>
           <p className="text-sm text-slate-500 mt-1">
-            Book cataloging, rack locations, student loan circulation, and overdue fine management.
+            {isStudent
+              ? 'Browse available books in the school library catalog and check stock inventory.'
+              : 'Book cataloging, rack locations, student loan circulation, and overdue fine management.'}
           </p>
         </div>
 
-        <Button
-          variant="primary"
-          onClick={() => setIsBookModalOpen(true)}
-          icon={<Plus className="w-4 h-4" />}
-        >
-          Catalog New Book
-        </Button>
+        {!isStudent && (
+          <Button
+            variant="primary"
+            onClick={() => setIsBookModalOpen(true)}
+            icon={<Plus className="w-4 h-4" />}
+          >
+            Catalog New Book
+          </Button>
+        )}
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-2">
-        <button
-          onClick={() => setActiveTab('catalog')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all ${
-            activeTab === 'catalog'
-              ? 'border-indigo-600 text-indigo-600'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <BookOpen className="w-4 h-4" />
-          <span>Book Catalog</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('transactions')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all ${
-            activeTab === 'transactions'
-              ? 'border-indigo-600 text-indigo-600'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <RotateCcw className="w-4 h-4" />
-          <span>Circulation Loans & Returns</span>
-        </button>
-      </div>
+      {!isStudent && (
+        <div className="flex border-b border-slate-200 gap-2">
+          <button
+            onClick={() => setActiveTab('catalog')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all ${
+              activeTab === 'catalog'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>Book Catalog</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('transactions')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all ${
+              activeTab === 'transactions'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <RotateCcw className="w-4 h-4" />
+            <span>Circulation Loans & Returns</span>
+          </button>
+        </div>
+      )}
 
       {loading && (
         <div className="py-12 flex justify-center">
@@ -332,17 +343,23 @@ export const LibraryPage = () => {
                       </span>
                     </div>
 
-                    <Button
-                      size="sm"
-                      variant={b.availableCopies > 0 ? 'primary' : 'secondary'}
-                      disabled={b.availableCopies <= 0}
-                      onClick={() => {
-                        setSelectedBookForIssue(b);
-                        setIsIssueModalOpen(true);
-                      }}
-                    >
-                      {b.availableCopies > 0 ? 'Issue Book' : 'Out of Stock'}
-                    </Button>
+                    {!isStudent ? (
+                      <Button
+                        size="sm"
+                        variant={b.availableCopies > 0 ? 'primary' : 'secondary'}
+                        disabled={b.availableCopies <= 0}
+                        onClick={() => {
+                          setSelectedBookForIssue(b);
+                          setIsIssueModalOpen(true);
+                        }}
+                      >
+                        {b.availableCopies > 0 ? 'Issue Book' : 'Out of Stock'}
+                      </Button>
+                    ) : (
+                      <Badge variant={b.availableCopies > 0 ? 'success' : 'danger'}>
+                        {b.availableCopies > 0 ? `${b.availableCopies} Available` : 'Out of Stock'}
+                      </Badge>
+                    )}
                   </div>
                 </Card>
               ))
@@ -350,9 +367,13 @@ export const LibraryPage = () => {
               <div className="col-span-3">
                 <EmptyState
                   title="No books cataloged"
-                  description="Add books with copies and rack locations to populate the school library."
-                  actionLabel="+ Catalog First Book"
-                  onAction={() => setIsBookModalOpen(true)}
+                  description={
+                    isStudent
+                      ? "There are currently no books cataloged in the school library."
+                      : "Add books with copies and rack locations to populate the school library."
+                  }
+                  actionLabel={!isStudent ? "+ Catalog First Book" : undefined}
+                  onAction={!isStudent ? () => setIsBookModalOpen(true) : undefined}
                 />
               </div>
             )}
@@ -452,7 +473,7 @@ export const LibraryPage = () => {
       {/* MODAL: CATALOG BOOK */}
       {/* ========================================================================= */}
       <Modal
-        isOpen={isBookModalOpen}
+        isOpen={!isStudent && isBookModalOpen}
         onClose={() => setIsBookModalOpen(false)}
         title="Catalog New Library Book"
       >
@@ -546,7 +567,7 @@ export const LibraryPage = () => {
       {/* MODAL: ISSUE BOOK */}
       {/* ========================================================================= */}
       <Modal
-        isOpen={isIssueModalOpen}
+        isOpen={!isStudent && isIssueModalOpen}
         onClose={() => setIsIssueModalOpen(false)}
         title="Check Out / Issue Library Book"
       >

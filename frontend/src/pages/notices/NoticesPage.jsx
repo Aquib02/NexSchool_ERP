@@ -55,9 +55,9 @@ export const NoticesPage = () => {
   const loadNotices = async () => {
     try {
       setLoading(true);
-      const params = {};
+      const isStudent = user?.role?.name === 'STUDENT';
       if (categoryFilter !== 'All') params.category = categoryFilter;
-      if (audienceFilter !== 'All') params.targetAudience = audienceFilter;
+      if (!isStudent && audienceFilter !== 'All') params.targetAudience = audienceFilter;
       if (search) params.search = search;
 
       const res = await noticeService.getNotices(params);
@@ -111,7 +111,8 @@ export const NoticesPage = () => {
     }
   };
 
-  const canPublish = hasRole(['SUPER_ADMIN', 'PRINCIPAL', 'ADMINISTRATOR', 'TEACHER']);
+  const isStudent = user?.role?.name === 'STUDENT';
+  const canPublish = !isStudent && hasRole(['SUPER_ADMIN', 'PRINCIPAL', 'ADMINISTRATOR', 'TEACHER']);
 
   // Pinned Emergency or Top notices
   const pinnedNotices = notices.filter((n) => n.isPinned);
@@ -184,17 +185,19 @@ export const NoticesPage = () => {
             )}
           </select>
 
-          <select
-            value={audienceFilter}
-            onChange={(e) => setAudienceFilter(e.target.value)}
-            className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white"
-          >
-            <option value="All">All Audiences</option>
-            <option value="Students">Students</option>
-            <option value="Teachers">Teachers</option>
-            <option value="Staff">Staff</option>
-            <option value="Parents">Parents</option>
-          </select>
+          {!isStudent && (
+            <select
+              value={audienceFilter}
+              onChange={(e) => setAudienceFilter(e.target.value)}
+              className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white"
+            >
+              <option value="All">All Audiences</option>
+              <option value="Students">Students</option>
+              <option value="Teachers">Teachers</option>
+              <option value="Staff">Staff</option>
+              <option value="Parents">Parents</option>
+            </select>
+          )}
 
           <Button variant="secondary" size="sm" onClick={loadNotices}>
             Search
@@ -273,7 +276,7 @@ export const NoticesPage = () => {
         <EmptyState
           icon={Megaphone}
           title="No circulars posted"
-          description="Click 'Publish Circular' to post school announcements."
+          description={canPublish ? "Click 'Publish Circular' to post school announcements." : "No circulars have been published yet."}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

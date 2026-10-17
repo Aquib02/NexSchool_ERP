@@ -64,6 +64,35 @@ export const submitAssignment = asyncHandler(async (req, res) => {
     studentId: resolvedStudentId,
   });
 
+  // Dual-sync to Homework.submissions
+  try {
+    const hw = await Homework.findById(homeworkId);
+    if (hw) {
+      const existingSubIdx = hw.submissions.findIndex(
+        (s) => s.studentId?.toString() === resolvedStudentId.toString()
+      );
+      const isLate = new Date() > new Date(hw.dueDate);
+      const subItem = {
+        studentId: resolvedStudentId,
+        submittedAt: new Date(),
+        content: submissionText || 'Completed assignment',
+        fileUrl: attachments?.[0]?.fileUrl || null,
+        status: isLate ? 'Late' : 'Submitted',
+      };
+      if (existingSubIdx >= 0) {
+        hw.submissions[existingSubIdx] = {
+          ...(hw.submissions[existingSubIdx].toObject ? hw.submissions[existingSubIdx].toObject() : hw.submissions[existingSubIdx]),
+          ...subItem,
+        };
+      } else {
+        hw.submissions.push(subItem);
+      }
+      await hw.save();
+    }
+  } catch (hwErr) {
+    // Non-fatal
+  }
+
   if (existing) {
     existing.submissionText = submissionText || existing.submissionText;
     if (attachments.length > 0) existing.attachments = attachments;

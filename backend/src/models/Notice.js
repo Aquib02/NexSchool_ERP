@@ -14,7 +14,7 @@ const noticeSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ['Academic', 'Administrative', 'Examination', 'Holiday', 'Sports', 'Event', 'Emergency'],
+      enum: ['General', 'Academic', 'Administrative', 'Examination', 'Holiday', 'Sports', 'Event', 'Emergency'],
       default: 'General',
     },
     targetAudience: {

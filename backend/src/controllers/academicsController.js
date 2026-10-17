@@ -30,8 +30,19 @@ export const calculateGrade = (percentage) => {
 
 // ==================== TIMETABLE ====================
 export const getTimetable = asyncHandler(async (req, res) => {
-  const { classId, sectionId, dayOfWeek } = req.query;
+  let { classId, sectionId, dayOfWeek } = req.query;
   const filter = {};
+
+  if (req.user?.role?.name === 'STUDENT') {
+    let student = null;
+    if (req.user.studentId) student = await Student.findById(req.user.studentId);
+    if (!student && req.user._id) student = await Student.findOne({ userId: req.user._id });
+    if (student) {
+      classId = student.classId;
+      sectionId = student.sectionId;
+    }
+  }
+
   if (classId) filter.classId = classId;
   if (sectionId) filter.sectionId = sectionId;
   if (dayOfWeek) filter.dayOfWeek = dayOfWeek;
@@ -390,8 +401,19 @@ export const saveClassAttendance = asyncHandler(async (req, res) => {
 
 // ==================== HOMEWORK ====================
 export const getHomeworkList = asyncHandler(async (req, res) => {
-  const { classId, sectionId, subjectId } = req.query;
+  let { classId, sectionId, subjectId } = req.query;
   const filter = {};
+
+  if (req.user?.role?.name === 'STUDENT') {
+    let student = null;
+    if (req.user.studentId) student = await Student.findById(req.user.studentId);
+    if (!student && req.user._id) student = await Student.findOne({ userId: req.user._id });
+    if (student) {
+      classId = student.classId;
+      sectionId = student.sectionId;
+    }
+  }
+
   if (classId) filter.classId = classId;
   if (sectionId) filter.sectionId = sectionId;
   if (subjectId) filter.subjectId = subjectId;
@@ -401,6 +423,7 @@ export const getHomeworkList = asyncHandler(async (req, res) => {
     .populate('sectionId', 'name')
     .populate('subjectId', 'name code')
     .populate('assignedBy', 'firstName lastName')
+    .populate('submissions.studentId', 'firstName lastName studentId admissionNumber rollNumber')
     .sort({ dueDate: -1 });
 
   return ApiResponse.ok(res, homework, 'Homework assignments retrieved');
@@ -519,6 +542,10 @@ export const submitHomework = asyncHandler(async (req, res) => {
   if (!hw) throw ApiError.notFound('Homework assignment not found');
 
   let studentId = req.user.studentId;
+  if (!studentId && req.user?._id) {
+    const sDoc = await Student.findOne({ userId: req.user._id });
+    if (sDoc) studentId = sDoc._id;
+  }
   if (req.user?.role?.name !== 'STUDENT') {
     studentId = studentId || req.body.studentId;
   }
@@ -526,25 +553,61 @@ export const submitHomework = asyncHandler(async (req, res) => {
 
   // Find existing submission or push new
   const existingSubIdx = hw.submissions.findIndex(
-    (s) => s.studentId.toString() === studentId.toString()
+    (s) => s.studentId?.toString() === studentId.toString()
   );
 
+  const isLate = new Date() > new Date(hw.dueDate);
   const submissionItem = {
     studentId,
     submittedAt: new Date(),
     fileUrl: fileUrl || null,
-    content: content || '',
-    status: new Date() > new Date(hw.dueDate) ? 'Late' : 'Submitted',
+    content: content || 'Completed task',
+    status: isLate ? 'Late' : 'Submitted',
   };
 
   if (existingSubIdx >= 0) {
-    hw.submissions[existingSubIdx] = submissionItem;
+    hw.submissions[existingSubIdx] = {
+      ...(hw.submissions[existingSubIdx].toObject ? hw.submissions[existingSubIdx].toObject() : hw.submissions[existingSubIdx]),
+      ...submissionItem,
+    };
   } else {
     hw.submissions.push(submissionItem);
   }
 
   await hw.save();
-  return ApiResponse.ok(res, hw, 'Homework submitted successfully');
+
+  // Dual-sync to AssignmentSubmission for LMS module
+  try {
+    const AssignmentSubmission = (await import('../models/AssignmentSubmission.js')).default;
+    const existingLms = await AssignmentSubmission.findOne({ homeworkId: hw._id, studentId });
+    if (existingLms) {
+      existingLms.submissionText = content || existingLms.submissionText;
+      existingLms.submissionDate = new Date();
+      existingLms.status = isLate ? 'Late' : 'Submitted';
+      if (fileUrl) existingLms.attachments = [{ title: 'Submission File', fileUrl }];
+      await existingLms.save();
+    } else {
+      await AssignmentSubmission.create({
+        homeworkId: hw._id,
+        studentId,
+        submissionText: content || 'Completed task',
+        submissionDate: new Date(),
+        status: isLate ? 'Late' : 'Submitted',
+        attachments: fileUrl ? [{ title: 'Submission File', fileUrl }] : [],
+      });
+    }
+  } catch (err) {
+    // Non-fatal LMS sync
+  }
+
+  const populated = await Homework.findById(hw._id)
+    .populate('classId', 'name code')
+    .populate('sectionId', 'name')
+    .populate('subjectId', 'name code')
+    .populate('assignedBy', 'firstName lastName')
+    .populate('submissions.studentId', 'firstName lastName studentId admissionNumber rollNumber');
+
+  return ApiResponse.ok(res, populated, 'Homework submitted successfully');
 });
 
 export const gradeHomeworkSubmission = asyncHandler(async (req, res) => {
@@ -573,7 +636,17 @@ export const gradeHomeworkSubmission = asyncHandler(async (req, res) => {
 
 // ==================== EXAMINATION & MARKS ====================
 export const getExams = asyncHandler(async (req, res) => {
-  const exams = await Exam.find()
+  const filter = {};
+  if (req.user?.role?.name === 'STUDENT') {
+    let student = null;
+    if (req.user.studentId) student = await Student.findById(req.user.studentId);
+    if (!student && req.user._id) student = await Student.findOne({ userId: req.user._id });
+    if (student?.classId) {
+      filter.classes = student.classId;
+    }
+  }
+
+  const exams = await Exam.find(filter)
     .populate('classes', 'name code')
     .populate('schedule.subjectId', 'name code')
     .sort({ startDate: -1 });

@@ -51,7 +51,16 @@ export const getTeachers = asyncHandler(async (req, res) => {
 
 // ==================== CLASSES ====================
 export const getClasses = asyncHandler(async (req, res) => {
-  const classes = await SchoolClass.find()
+  const filter = {};
+  if (req.user?.role?.name === 'STUDENT') {
+    let student = null;
+    if (req.user.studentId) student = await Student.findById(req.user.studentId);
+    if (!student && req.user._id) student = await Student.findOne({ userId: req.user._id });
+    if (student?.classId) {
+      filter._id = student.classId;
+    }
+  }
+  const classes = await SchoolClass.find(filter)
     .populate('classTeacherId', 'firstName lastName employeeId email phone')
     .sort({ numericOrder: 1 });
   return ApiResponse.ok(res, classes, 'Classes retrieved successfully');
@@ -290,6 +299,14 @@ export const deleteClass = asyncHandler(async (req, res) => {
 export const getSections = asyncHandler(async (req, res) => {
   const { classId } = req.query;
   const filter = classId ? { classId } : {};
+  if (req.user?.role?.name === 'STUDENT') {
+    let student = null;
+    if (req.user.studentId) student = await Student.findById(req.user.studentId);
+    if (!student && req.user._id) student = await Student.findOne({ userId: req.user._id });
+    if (student?.sectionId) {
+      filter._id = student.sectionId;
+    }
+  }
   const sections = await Section.find(filter)
     .populate('classId', 'name code')
     .populate('classTeacherId', 'firstName lastName employeeId email phone')

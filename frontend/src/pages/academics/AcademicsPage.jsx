@@ -39,6 +39,7 @@ import LoadingSpinner from '../../components/common/LoadingSpinner.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
 import academicsService from '../../services/academicsService.js';
 import adminService from '../../services/adminService.js';
+import portalService from '../../services/portalService.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import printElement from '../../utils/printUtils.js';
 
@@ -106,6 +107,22 @@ export const AcademicsPage = () => {
     attachmentUrl: '',
   });
 
+  // Student Enrollment Isolation State
+  const [studentEnrollment, setStudentEnrollment] = useState(null);
+
+  // Student Homework Submission Modal State
+  const [isStudentSubmitModalOpen, setIsStudentSubmitModalOpen] = useState(false);
+  const [targetHwForSubmission, setTargetHwForSubmission] = useState(null);
+  const [studentSubmitContent, setStudentSubmitContent] = useState('');
+  const [studentSubmitFileUrl, setStudentSubmitFileUrl] = useState('');
+  const [isSubmittingTask, setIsSubmittingTask] = useState(false);
+
+  // Teacher Homework Review Modal State
+  const [isReviewSubmissionsModalOpen, setIsReviewSubmissionsModalOpen] = useState(false);
+  const [selectedHwForReview, setSelectedHwForReview] = useState(null);
+  const [gradingState, setGradingState] = useState({});
+  const [isSavingGrade, setIsSavingGrade] = useState(false);
+
   // 4. EXAMS & MARKS STATE
   const [exams, setExams] = useState([]);
   const [selectedExamId, setSelectedExamId] = useState('');
@@ -137,15 +154,68 @@ export const AcademicsPage = () => {
           academicsService.getExams().catch(() => ({ data: [] })),
           academicsService.getTeachers().catch(() => ({ data: [] })),
         ]);
-        setClasses(clsRes.data || []);
-        setSections(secRes.data || []);
+        let loadedClasses = clsRes.data || [];
+        let loadedSections = secRes.data || [];
         setSubjects(subRes.data || []);
         setExams(exRes.data || []);
         setTeachersList(tchRes.data || []);
 
-        if (clsRes.data?.length > 0) {
-          setSelectedClassId(clsRes.data[0]._id);
+        if (isStudent) {
+          let sClassId = user?.studentId?.classId?._id || user?.studentId?.classId;
+          let sSectionId = user?.studentId?.sectionId?._id || user?.studentId?.sectionId;
+          let sClassName = user?.studentId?.classId?.name;
+          let sSectionName = user?.studentId?.sectionId?.name;
+          let sStudentId = user?.studentId?._id || user?.studentId;
+
+          if (!sClassId) {
+            try {
+              const portalRes = await portalService.getStudentPortalData();
+              if (portalRes.data?.data?.student) {
+                const s = portalRes.data.data.student;
+                sClassId = s.classId?._id || s.classId;
+                sSectionId = s.sectionId?._id || s.sectionId;
+                sClassName = s.classId?.name || sClassName;
+                sSectionName = s.sectionId?.name || sSectionName;
+                sStudentId = s._id || sStudentId;
+              }
+            } catch (pErr) {
+              console.warn('Could not fetch portal student fallback', pErr);
+            }
+          }
+
+          if (sClassId) {
+            loadedClasses = loadedClasses.filter((c) => c._id === sClassId);
+            if (loadedClasses.length === 0 && sClassName) {
+              loadedClasses = [{ _id: sClassId, name: sClassName }];
+            }
+          }
+          if (sSectionId) {
+            loadedSections = loadedSections.filter((s) => s._id === sSectionId);
+            if (loadedSections.length === 0 && sSectionName) {
+              loadedSections = [{ _id: sSectionId, name: sSectionName, classId: sClassId }];
+            }
+          }
+
+          setStudentEnrollment({
+            studentId: sStudentId,
+            classId: sClassId,
+            sectionId: sSectionId,
+            className: sClassName || loadedClasses[0]?.name || 'My Class',
+            sectionName: sSectionName || loadedSections[0]?.name || 'A',
+          });
+
+          setClasses(loadedClasses);
+          setSections(loadedSections);
+          setSelectedClassId(sClassId || (loadedClasses[0] ? loadedClasses[0]._id : ''));
+          setSelectedSectionId(sSectionId || (loadedSections[0] ? loadedSections[0]._id : ''));
+        } else {
+          setClasses(loadedClasses);
+          setSections(loadedSections);
+          if (loadedClasses.length > 0) {
+            setSelectedClassId(loadedClasses[0]._id);
+          }
         }
+
         if (exRes.data?.length > 0) {
           setSelectedExamId((prev) => prev || exRes.data[0]._id);
         }
@@ -154,10 +224,14 @@ export const AcademicsPage = () => {
       }
     };
     fetchMetadata();
-  }, []);
+  }, [isStudent]);
 
   // Update sections when selected class changes
   useEffect(() => {
+    if (isStudent && studentEnrollment?.sectionId) {
+      setSelectedSectionId(studentEnrollment.sectionId);
+      return;
+    }
     if (selectedClassId) {
       const classSecs = sections.filter(
         (s) => s.classId?._id === selectedClassId || s.classId === selectedClassId
@@ -168,7 +242,17 @@ export const AcademicsPage = () => {
         setSelectedSectionId('');
       }
     }
-  }, [selectedClassId, sections]);
+  }, [selectedClassId, sections, isStudent, studentEnrollment]);
+
+  const currentClassName =
+    classes.find((c) => c._id === selectedClassId)?.name ||
+    studentEnrollment?.className ||
+    'Class';
+
+  const currentSectionName =
+    sections.find((s) => s._id === selectedSectionId)?.name ||
+    studentEnrollment?.sectionName ||
+    'A';
 
   // Load Attendance when Class, Section, or Date changes
   useEffect(() => {
@@ -510,10 +594,15 @@ export const AcademicsPage = () => {
     }
   };
 
-  // Load Homework
+  // Load Homework with real-time automatic polling
   useEffect(() => {
     if (activeTab === 'homework' && selectedClassId && selectedSectionId) {
       fetchHomework();
+      // Auto-poll every 6 seconds so student completion immediately appears on teacher's screen
+      const pollTimer = setInterval(() => {
+        fetchHomework();
+      }, 6000);
+      return () => clearInterval(pollTimer);
     }
   }, [activeTab, selectedClassId, selectedSectionId]);
 
@@ -524,8 +613,79 @@ export const AcademicsPage = () => {
         sectionId: selectedSectionId,
       });
       setHomeworkList(res.data || []);
+      // If review modal is open, sync the selected homework data
+      if (selectedHwForReview) {
+        const refreshedSelected = (res.data || []).find((h) => h._id === selectedHwForReview._id);
+        if (refreshedSelected) setSelectedHwForReview(refreshedSelected);
+      }
     } catch (e) {
       console.error('Failed to load homework', e);
+    }
+  };
+
+  const handleOpenSubmitModal = (hw) => {
+    setTargetHwForSubmission(hw);
+    const curStudentId = user?.studentId?._id || user?.studentId || studentEnrollment?.studentId;
+    const existingSub = hw.submissions?.find(
+      (s) => (s.studentId?._id || s.studentId)?.toString() === curStudentId?.toString()
+    );
+    setStudentSubmitContent(existingSub?.content || '');
+    setStudentSubmitFileUrl(existingSub?.fileUrl || '');
+    setIsStudentSubmitModalOpen(true);
+  };
+
+  const handleStudentSubmitHomework = async (e) => {
+    e.preventDefault();
+    if (!targetHwForSubmission) return;
+    setIsSubmittingTask(true);
+    try {
+      await academicsService.submitHomework(targetHwForSubmission._id, {
+        content: studentSubmitContent.trim() || 'Completed task',
+        fileUrl: studentSubmitFileUrl.trim() || undefined,
+      });
+      setHwActionMsg(`✓ Homework "${targetHwForSubmission.title}" submitted successfully! It is now reflected on your teacher's portal.`);
+      setIsStudentSubmitModalOpen(false);
+      setTargetHwForSubmission(null);
+      setStudentSubmitContent('');
+      setStudentSubmitFileUrl('');
+      fetchHomework();
+    } catch (err) {
+      alert(err.message || 'Failed to submit homework');
+    } finally {
+      setIsSubmittingTask(false);
+    }
+  };
+
+  const handleOpenReviewSubmissions = (hw) => {
+    setSelectedHwForReview(hw);
+    const initialGrading = {};
+    if (hw.submissions && Array.isArray(hw.submissions)) {
+      hw.submissions.forEach((sub) => {
+        const sId = sub.studentId?._id || sub.studentId;
+        initialGrading[sId] = {
+          marksAwarded: sub.marksAwarded !== undefined ? sub.marksAwarded : '',
+          teacherFeedback: sub.teacherFeedback || '',
+        };
+      });
+    }
+    setGradingState(initialGrading);
+    setIsReviewSubmissionsModalOpen(true);
+  };
+
+  const handleSaveGradeForSubmission = async (hwId, studentId) => {
+    setIsSavingGrade(true);
+    try {
+      const g = gradingState[studentId] || {};
+      await academicsService.gradeHomework(hwId, studentId, {
+        marksAwarded: Number(g.marksAwarded) || 0,
+        teacherFeedback: g.teacherFeedback || '',
+      });
+      alert('Student submission graded successfully!');
+      fetchHomework();
+    } catch (err) {
+      alert(err.message || 'Failed to grade submission');
+    } finally {
+      setIsSavingGrade(false);
     }
   };
 
@@ -1002,34 +1162,59 @@ export const AcademicsPage = () => {
       </div>
 
       {/* Global Class & Section Filter Selector */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-semibold text-slate-600">Select Class:</label>
-          <select
-            value={selectedClassId}
-            onChange={(e) => setSelectedClassId(e.target.value)}
-            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 font-semibold"
-          >
-            {classes.map((c) => (
-              <option key={c._id} value={c._id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        {isStudent ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500">My Enrolled Class:</span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200/80 text-xs font-bold text-indigo-700">
+                {studentEnrollment?.className || classes[0]?.name || 'My Class'}
+              </span>
+            </div>
 
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-semibold text-slate-600">Section:</label>
-          <select
-            value={selectedSectionId}
-            onChange={(e) => setSelectedSectionId(e.target.value)}
-            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 font-semibold"
-          >
-            {sections
-              .filter((s) => s.classId?._id === selectedClassId || s.classId === selectedClassId)
-              .map((sec) => (
-                <option key={sec._id} value={sec._id}>Section {sec.name}</option>
-              ))}
-          </select>
-        </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500">Section:</span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-slate-700">
+                Section {studentEnrollment?.sectionName || sections[0]?.name || 'A'}
+              </span>
+            </div>
+
+            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200/60">
+              <Check className="w-3 h-3 text-emerald-500" />
+              Viewing your class timetable and tasks only
+            </span>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold text-slate-600">Select Class:</label>
+              <select
+                value={selectedClassId}
+                onChange={(e) => setSelectedClassId(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 font-semibold"
+              >
+                {classes.map((c) => (
+                  <option key={c._id} value={c._id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold text-slate-600">Section:</label>
+              <select
+                value={selectedSectionId}
+                onChange={(e) => setSelectedSectionId(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 font-semibold"
+              >
+                {sections
+                  .filter((s) => s.classId?._id === selectedClassId || s.classId === selectedClassId)
+                  .map((sec) => (
+                    <option key={sec._id} value={sec._id}>Section {sec.name}</option>
+                  ))}
+              </select>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -1295,14 +1480,16 @@ export const AcademicsPage = () => {
               )}
 
               {/* Extract Timetable from PDF */}
-              <button
-                type="button"
-                onClick={() => setIsExtractModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                Extract PDF
-              </button>
+              {!isStudent && (
+                <button
+                  type="button"
+                  onClick={() => setIsExtractModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Extract PDF
+                </button>
+              )}
 
               {/* Export Timetable PDF */}
               <a
@@ -1383,13 +1570,15 @@ export const AcademicsPage = () => {
                       Design Routine
                     </Button>
                   )}
-                  <Button
-                    variant="secondary"
-                    icon={Sparkles}
-                    onClick={() => setIsExtractModalOpen(true)}
-                  >
-                    Extract from PDF
-                  </Button>
+                  {!isStudent && (
+                    <Button
+                      variant="secondary"
+                      icon={Sparkles}
+                      onClick={() => setIsExtractModalOpen(true)}
+                    >
+                      Extract from PDF
+                    </Button>
+                  )}
                 </div>
               </div>
             ) : (
@@ -1405,8 +1594,8 @@ export const AcademicsPage = () => {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-slate-500">
-                      Grade 10 • Section A
+                    <span className="text-xs font-mono font-medium text-slate-600 bg-slate-100/80 px-2 py-0.5 rounded-md border border-slate-200/60">
+                      {currentClassName} • Section {currentSectionName}
                     </span>
                     {!isStudent && (
                       <button
@@ -1523,7 +1712,9 @@ export const AcademicsPage = () => {
                     Weekly Master Timetable Matrix Grid
                   </span>
                 </div>
-                <span className="text-xs text-slate-500 font-medium">Grade 10 • Section A (Monday - Friday)</span>
+                <span className="text-xs font-mono font-medium text-slate-600 bg-slate-100/80 px-2 py-0.5 rounded-md border border-slate-200/60">
+                  {currentClassName} • Section {currentSectionName} (Monday - Friday)
+                </span>
               </div>
 
               <div className="overflow-x-auto">
@@ -1635,23 +1826,36 @@ export const AcademicsPage = () => {
             </div>
           )}
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-base font-bold text-slate-800">Homework & Submissions</h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Manage curriculum tasks, assign PDF worksheets, and review student homework.
+                {isStudent
+                  ? 'View assigned curriculum homework, submit completed tasks, and track evaluation status.'
+                  : 'Manage curriculum tasks, assign PDF worksheets, and review student homework in real-time.'}
               </p>
             </div>
-            {!isStudent && (
+            <div className="flex items-center gap-2">
               <Button
-                variant="primary"
+                variant="secondary"
                 size="sm"
-                icon={Plus}
-                onClick={handleOpenCreateHw}
+                icon={RefreshCw}
+                onClick={fetchHomework}
+                title="Refresh Homework & Submissions in real-time"
               >
-                Assign Homework
+                Refresh
               </Button>
-            )}
+              {!isStudent && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={Plus}
+                  onClick={handleOpenCreateHw}
+                >
+                  Assign Homework
+                </Button>
+              )}
+            </div>
           </div>
 
           {homeworkList.length === 0 ? (
@@ -1664,67 +1868,131 @@ export const AcademicsPage = () => {
             />
           ) : (
             <div className="space-y-3">
-              {homeworkList.map((hw) => (
-                <Card key={hw._id} className="p-5">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="primary">{hw.subjectId?.name}</Badge>
-                        <span className="text-xs text-slate-400">
-                          Due: {new Date(hw.dueDate).toLocaleDateString()}
-                        </span>
+              {homeworkList.map((hw) => {
+                const currentStudentId = user?.studentId?._id || user?.studentId || studentEnrollment?.studentId;
+                const mySub = hw.submissions?.find((s) => {
+                  const sid = s.studentId?._id || s.studentId;
+                  return sid?.toString() === currentStudentId?.toString();
+                });
+                const isCompleted = !!mySub;
+
+                return (
+                  <Card key={hw._id} className="p-5">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                      <div className="space-y-1.5 flex-1">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="primary">{hw.subjectId?.name}</Badge>
+                          <span className="text-xs text-slate-400">
+                            Due: {new Date(hw.dueDate).toLocaleDateString()}
+                          </span>
+                          {isStudent && (
+                            <Badge variant={isCompleted ? 'success' : 'warning'}>
+                              {isCompleted ? '✓ Completed' : 'Pending'}
+                            </Badge>
+                          )}
+                        </div>
+                        <h4 className="text-base font-bold text-slate-900 mt-1">{hw.title}</h4>
+                        <p className="text-xs text-slate-600 mt-1 max-w-2xl">{hw.description}</p>
+                        {hw.attachments?.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-2 mt-2">
+                            {hw.attachments.map((att, idx) => (
+                              <a
+                                key={idx}
+                                href={att.fileUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold border border-indigo-200/60 transition-colors"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                                {att.title || 'Attached PDF Worksheet'}
+                              </a>
+                            ))}
+                          </div>
+                        )}
+
+                        {isStudent && isCompleted && (
+                          <div className="mt-2.5 p-3 rounded-xl bg-emerald-50/80 border border-emerald-200/70 text-xs">
+                            <div className="flex items-center justify-between text-emerald-800 font-semibold mb-1">
+                              <span>✓ Submitted on {new Date(mySub.submittedAt).toLocaleString()}</span>
+                              {mySub.status === 'Graded' && (
+                                <span className="bg-emerald-600 text-white px-2 py-0.5 rounded-lg text-[11px]">
+                                  Score: {mySub.marksAwarded} / {hw.maxMarks || 50}
+                                </span>
+                              )}
+                            </div>
+                            {mySub.content && (
+                              <p className="text-slate-600 font-normal">
+                                <span className="font-medium text-slate-700">Your solution / notes:</span> "{mySub.content}"
+                              </p>
+                            )}
+                            {mySub.fileUrl && (
+                              <a
+                                href={mySub.fileUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-indigo-600 hover:underline font-medium inline-block mt-1"
+                              >
+                                Attached solution file ↗
+                              </a>
+                            )}
+                            {mySub.teacherFeedback && (
+                              <div className="mt-1.5 p-2 bg-white rounded-lg border border-emerald-200 text-slate-700">
+                                <span className="font-bold text-indigo-700">Teacher Feedback:</span> {mySub.teacherFeedback}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <h4 className="text-base font-bold text-slate-900 mt-1">{hw.title}</h4>
-                      <p className="text-xs text-slate-600 mt-1 max-w-2xl">{hw.description}</p>
-                      {hw.attachments?.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-2 mt-2">
-                          {hw.attachments.map((att, idx) => (
-                            <a
-                              key={idx}
-                              href={att.fileUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold border border-indigo-200/60 transition-colors"
+
+                      <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
+                        {isStudent ? (
+                          <Button
+                            variant={isCompleted ? 'secondary' : 'primary'}
+                            size="sm"
+                            icon={isCompleted ? Edit3 : CheckCircle2}
+                            onClick={() => handleOpenSubmitModal(hw)}
+                          >
+                            {isCompleted ? 'Update Submission' : 'Complete Task'}
+                          </Button>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenReviewSubmissions(hw)}
+                              title="Review submissions from students"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold shadow-xs transition-colors cursor-pointer"
                             >
-                              <FileText className="w-3.5 h-3.5 text-indigo-600" />
-                              {att.title || 'Attached PDF Worksheet'}
-                            </a>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                              <Users className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>{hw.submissions?.length || 0} Submissions</span>
+                            </button>
 
-                    <div className="flex items-center gap-2.5 shrink-0">
-                      <span className="text-xs font-semibold text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-                        {hw.submissions?.length || 0} Submissions
-                      </span>
-
-                      {!isStudent && (
-                        <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2.5">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditHw(hw)}
-                            title="Edit Homework"
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 text-slate-700 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-                          >
-                            <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteHomework(hw)}
-                            title="Delete Homework"
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600 text-slate-700 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                            Delete
-                          </button>
-                        </div>
-                      )}
+                            <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2.5">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditHw(hw)}
+                                title="Edit Homework"
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 text-slate-700 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                              >
+                                <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteHomework(hw)}
+                                title="Delete Homework"
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600 text-slate-700 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                                Delete
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </Card>
-              ))}
+                  </Card>
+                );
+              })}
             </div>
           )}
         </div>
@@ -2331,6 +2599,236 @@ export const AcademicsPage = () => {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* STUDENT SUBMIT HOMEWORK MODAL */}
+      <Modal
+        isOpen={isStudentSubmitModalOpen}
+        onClose={() => {
+          setIsStudentSubmitModalOpen(false);
+          setTargetHwForSubmission(null);
+        }}
+        title={`Submit Task: ${targetHwForSubmission?.title || 'Homework'}`}
+      >
+        {targetHwForSubmission && (
+          <form onSubmit={handleStudentSubmitHomework} className="space-y-4 text-xs">
+            <div className="p-3.5 bg-indigo-50/70 border border-indigo-200/60 rounded-xl space-y-1">
+              <div className="flex items-center justify-between">
+                <Badge variant="primary">{targetHwForSubmission.subjectId?.name || 'Subject'}</Badge>
+                <span className="text-slate-500 font-medium">
+                  Due: {new Date(targetHwForSubmission.dueDate).toLocaleDateString()}
+                </span>
+              </div>
+              <h4 className="font-bold text-slate-800 text-sm mt-1">{targetHwForSubmission.title}</h4>
+              <p className="text-slate-600 text-xs">{targetHwForSubmission.description}</p>
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Your Solution / Notes / Answers *
+              </label>
+              <textarea
+                required
+                rows={4}
+                value={studentSubmitContent}
+                onChange={(e) => setStudentSubmitContent(e.target.value)}
+                placeholder="Write your completed task answers, solution summary, or completion notes here..."
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-hidden focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Attachment / Project Link (Optional)
+              </label>
+              <input
+                type="text"
+                value={studentSubmitFileUrl}
+                onChange={(e) => setStudentSubmitFileUrl(e.target.value)}
+                placeholder="https://drive.google.com/... or /documents/solution.pdf"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-[11px]"
+              />
+              <span className="text-[11px] text-slate-400 mt-1 block">
+                Provide a shareable link to your worksheet or document if applicable.
+              </span>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setIsStudentSubmitModalOpen(false);
+                  setTargetHwForSubmission(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                icon={CheckCircle2}
+                isLoading={isSubmittingTask}
+              >
+                Submit & Mark Completed
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* TEACHER REVIEW SUBMISSIONS MODAL */}
+      <Modal
+        isOpen={isReviewSubmissionsModalOpen}
+        onClose={() => {
+          setIsReviewSubmissionsModalOpen(false);
+          setSelectedHwForReview(null);
+        }}
+        title={`Student Submissions — ${selectedHwForReview?.title || 'Homework'}`}
+      >
+        {selectedHwForReview && (
+          <div className="space-y-4 text-xs">
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <span className="font-bold text-slate-800 text-sm">{selectedHwForReview.title}</span>
+                <span className="text-slate-400 block mt-0.5">
+                  Subject: {selectedHwForReview.subjectId?.name || 'Subject'} | Max Marks: {selectedHwForReview.maxMarks || 50}
+                </span>
+              </div>
+              <Badge variant="primary">
+                {selectedHwForReview.submissions?.length || 0} Total Submissions
+              </Badge>
+            </div>
+
+            {(!selectedHwForReview.submissions || selectedHwForReview.submissions.length === 0) ? (
+              <div className="text-center py-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="font-semibold text-slate-700">No student submissions received yet</p>
+                <p className="text-slate-400 text-[11px] mt-1 max-w-sm mx-auto">
+                  When students in this class submit their homework task, their answers and completion status will automatically appear here in real time.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                {selectedHwForReview.submissions.map((sub, idx) => {
+                  const student = sub.studentId || {};
+                  const sId = student._id || sub.studentId;
+                  const g = gradingState[sId] || {
+                    marksAwarded: sub.marksAwarded !== undefined ? sub.marksAwarded : '',
+                    teacherFeedback: sub.teacherFeedback || '',
+                  };
+
+                  return (
+                    <div
+                      key={sub._id || idx}
+                      className="p-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-200 transition-all space-y-2.5"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <span className="font-bold text-slate-900 text-sm">
+                            {student.firstName ? `${student.firstName} ${student.lastName}` : (student.username || 'Student')}
+                          </span>
+                          <span className="text-slate-400 text-[11px] ml-2">
+                            {student.studentId || student.admissionNumber || ''}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-slate-400">
+                            {new Date(sub.submittedAt).toLocaleString()}
+                          </span>
+                          <Badge variant={sub.status === 'Graded' ? 'success' : (sub.status === 'Late' ? 'danger' : 'primary')}>
+                            {sub.status || 'Submitted'}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {sub.content && (
+                        <div className="p-2.5 bg-slate-50 rounded-lg text-slate-700 text-xs">
+                          <span className="font-semibold text-slate-600 block mb-0.5">Submitted Content / Solution:</span>
+                          <p className="whitespace-pre-wrap">{sub.content}</p>
+                        </div>
+                      )}
+
+                      {sub.fileUrl && (
+                        <div className="flex items-center gap-2">
+                          <a
+                            href={sub.fileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs border border-indigo-200"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            View Attached Worksheet / File ↗
+                          </a>
+                        </div>
+                      )}
+
+                      {/* Grading Controls */}
+                      <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2 flex-1">
+                          <div className="w-28">
+                            <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">Marks (Max {selectedHwForReview.maxMarks || 50})</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max={selectedHwForReview.maxMarks || 50}
+                              value={g.marksAwarded}
+                              onChange={(e) => {
+                                setGradingState({
+                                  ...gradingState,
+                                  [sId]: { ...g, marksAwarded: e.target.value },
+                                });
+                              }}
+                              placeholder="Marks"
+                              className="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs"
+                            />
+                          </div>
+                          <div className="flex-1 min-w-[160px]">
+                            <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">Feedback / Comments</label>
+                            <input
+                              type="text"
+                              value={g.teacherFeedback}
+                              onChange={(e) => {
+                                setGradingState({
+                                  ...gradingState,
+                                  [sId]: { ...g, teacherFeedback: e.target.value },
+                                });
+                              }}
+                              placeholder="Great work, well detailed..."
+                              className="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs"
+                            />
+                          </div>
+                        </div>
+
+                        <Button
+                          size="xs"
+                          variant="primary"
+                          icon={Save}
+                          isLoading={isSavingGrade}
+                          onClick={() => handleSaveGradeForSubmission(selectedHwForReview._id, sId)}
+                        >
+                          Save Grade
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="pt-2 flex justify-end">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setIsReviewSubmissionsModalOpen(false);
+                  setSelectedHwForReview(null);
+                }}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* EXTRACT TIMETABLE FROM PDF MODAL */}
