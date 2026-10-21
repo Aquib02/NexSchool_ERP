@@ -56,12 +56,20 @@ export const NoticesPage = () => {
     try {
       setLoading(true);
       const isStudent = user?.role?.name === 'STUDENT';
+      const params = {};
       if (categoryFilter !== 'All') params.category = categoryFilter;
       if (!isStudent && audienceFilter !== 'All') params.targetAudience = audienceFilter;
       if (search) params.search = search;
 
       const res = await noticeService.getNotices(params);
-      if (res.data?.data) setNotices(res.data.data);
+      const list = Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res?.data?.data)
+        ? res.data.data
+        : Array.isArray(res)
+        ? res
+        : [];
+      setNotices(list);
     } catch (err) {
       console.error(err);
       showBanner('error', 'Failed to load notices');
@@ -90,10 +98,11 @@ export const NoticesPage = () => {
         expiryDate: '',
         attachmentUrl: '',
       });
-      loadNotices();
+      await loadNotices();
     } catch (err) {
       console.error(err);
-      showBanner('error', err.response?.data?.message || 'Failed to publish notice');
+      const msg = err.response?.data?.message || err.message || 'Failed to publish notice';
+      showBanner('error', msg);
     } finally {
       setLoading(false);
     }
@@ -104,7 +113,7 @@ export const NoticesPage = () => {
     try {
       await noticeService.deleteNotice(id);
       showBanner('success', 'Notice removed');
-      loadNotices();
+      await loadNotices();
     } catch (err) {
       console.error(err);
       showBanner('error', 'Failed to delete notice');
@@ -115,8 +124,9 @@ export const NoticesPage = () => {
   const canPublish = !isStudent && hasRole(['SUPER_ADMIN', 'PRINCIPAL', 'ADMINISTRATOR', 'TEACHER']);
 
   // Pinned Emergency or Top notices
-  const pinnedNotices = notices.filter((n) => n.isPinned);
-  const regularNotices = notices.filter((n) => !n.isPinned);
+  const noticeArray = Array.isArray(notices) ? notices : [];
+  const pinnedNotices = noticeArray.filter((n) => n.isPinned);
+  const regularNotices = noticeArray.filter((n) => !n.isPinned);
 
   return (
     <div className="space-y-6">
@@ -176,7 +186,7 @@ export const NoticesPage = () => {
             className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white"
           >
             <option value="All">All Categories</option>
-            {['Academic', 'Administrative', 'Examination', 'Holiday', 'Sports', 'Event', 'Emergency'].map(
+            {['General', 'Academic', 'Administrative', 'Examination', 'Holiday', 'Sports', 'Event', 'Emergency'].map(
               (cat) => (
                 <option key={cat} value={cat}>
                   {cat}
@@ -361,7 +371,7 @@ export const NoticesPage = () => {
                 onChange={(e) => setNoticeForm({ ...noticeForm, category: e.target.value })}
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl"
               >
-                {['Academic', 'Administrative', 'Examination', 'Holiday', 'Sports', 'Event', 'Emergency'].map(
+                {['General', 'Academic', 'Administrative', 'Examination', 'Holiday', 'Sports', 'Event', 'Emergency'].map(
                   (cat) => (
                     <option key={cat} value={cat}>
                       {cat}
@@ -402,8 +412,8 @@ export const NoticesPage = () => {
             <div>
               <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Attachment URL</label>
               <input
-                type="url"
-                placeholder="https://.../document.pdf"
+                type="text"
+                placeholder="https://.../document.pdf or /documents/notice.pdf"
                 value={noticeForm.attachmentUrl}
                 onChange={(e) => setNoticeForm({ ...noticeForm, attachmentUrl: e.target.value })}
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl"

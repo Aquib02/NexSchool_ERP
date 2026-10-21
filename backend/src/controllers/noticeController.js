@@ -109,10 +109,10 @@ export const createNotice = async (req, res, next) => {
       isPinned = false,
     } = req.body;
 
-    if (req.user?.role?.name === 'STUDENT') {
+    if (req.user?.role?.name === 'STUDENT' || req.user?.role?.name === 'PARENT') {
       return res.status(403).json({
         success: false,
-        message: 'Students are not authorized to publish campus notices or circulars',
+        message: 'Students and Parents are not authorized to publish campus notices or circulars',
       });
     }
 
@@ -124,15 +124,24 @@ export const createNotice = async (req, res, next) => {
     }
 
     const authorId = req.user?._id || new mongoose.Types.ObjectId();
+    const cleanAudience = Array.isArray(targetAudience) ? targetAudience : [targetAudience];
+
+    let parsedExpiry = null;
+    if (expiryDate && String(expiryDate).trim()) {
+      const expD = new Date(expiryDate);
+      if (!isNaN(expD.getTime())) {
+        parsedExpiry = expD;
+      }
+    }
 
     const notice = await Notice.create({
       title: title.trim(),
       content: content.trim(),
-      category,
-      targetAudience: Array.isArray(targetAudience) ? targetAudience : [targetAudience],
+      category: category || 'General',
+      targetAudience: cleanAudience.length > 0 ? cleanAudience : ['All'],
       targetClasses: Array.isArray(targetClasses) ? targetClasses : [],
       publishDate: publishDate ? new Date(publishDate) : new Date(),
-      expiryDate: expiryDate ? new Date(expiryDate) : null,
+      expiryDate: parsedExpiry,
       attachmentUrl: attachmentUrl?.trim() || null,
       isPinned: Boolean(isPinned),
       authorId,
@@ -143,15 +152,40 @@ export const createNotice = async (req, res, next) => {
       'username firstName lastName'
     );
 
-    // Auto-fanout In-App Notification
-    await Notification.create({
-      recipientType: notice.targetAudience.includes('All') ? 'BroadcastAll' : 'Role',
-      title: `Notice: ${notice.title}`,
-      message: notice.content.substring(0, 120) + (notice.content.length > 120 ? '...' : ''),
-      category: notice.category === 'Emergency' ? 'Emergency' : 'Notice',
-      actionUrl: '/notices',
-      channelDelivery: [{ channel: 'InApp', status: 'Delivered', deliveredAt: new Date() }],
-    });
+    // Auto-fanout In-App Notification safely
+    try {
+      if (notice.targetAudience.includes('All')) {
+        await Notification.create({
+          recipientType: 'BroadcastAll',
+          title: `Notice: ${notice.title}`,
+          message: notice.content.substring(0, 120) + (notice.content.length > 120 ? '...' : ''),
+          category: notice.category === 'Emergency' ? 'Emergency' : 'Notice',
+          actionUrl: '/notices',
+          channelDelivery: [{ channel: 'InApp', status: 'Delivered', deliveredAt: new Date() }],
+        });
+      } else {
+        const roleMap = {
+          Students: 'STUDENT',
+          Teachers: 'TEACHER',
+          Parents: 'PARENT',
+          Staff: 'STAFF',
+        };
+        for (const aud of notice.targetAudience) {
+          const roleTarget = roleMap[aud] || aud.toUpperCase();
+          await Notification.create({
+            recipientType: 'Role',
+            roleTarget,
+            title: `Notice: ${notice.title}`,
+            message: notice.content.substring(0, 120) + (notice.content.length > 120 ? '...' : ''),
+            category: notice.category === 'Emergency' ? 'Emergency' : 'Notice',
+            actionUrl: '/notices',
+            channelDelivery: [{ channel: 'InApp', status: 'Delivered', deliveredAt: new Date() }],
+          });
+        }
+      }
+    } catch (notifErr) {
+      console.error('[NoticeController] Notification fanout warning:', notifErr.message);
+    }
 
     // Audit log
     await logAudit({

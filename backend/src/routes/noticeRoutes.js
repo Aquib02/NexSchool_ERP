@@ -12,18 +12,22 @@ const canManageNotices = (action) => {
     if (!req.user || !req.user.role) {
       return res.status(401).json({ success: false, message: 'User not authenticated' });
     }
-    if (req.user.role.name === 'STUDENT') {
+    const roleName = req.user.role.name;
+    if (roleName === 'STUDENT' || roleName === 'PARENT') {
       return res.status(403).json({
         success: false,
-        message: 'Access denied: Students are not authorized to publish or manage notices.',
+        message: 'Access denied: Students and Parents are not authorized to publish or manage campus notices.',
       });
     }
-    if (req.user.role.name === 'SUPER_ADMIN') {
+
+    // Admins, Principals, and Teachers are inherently authorized to publish and manage circulars
+    if (['SUPER_ADMIN', 'ADMINISTRATOR', 'PRINCIPAL', 'TEACHER'].includes(roleName)) {
       return next();
     }
+
     const permissions = req.user.role.permissions || [];
     const hasPerm = permissions.some((perm) => {
-      const code = perm.code || '';
+      const code = perm.code || (typeof perm === 'string' ? perm : '');
       return (
         code === `notices:${action}` ||
         code === `communication:${action}` ||
