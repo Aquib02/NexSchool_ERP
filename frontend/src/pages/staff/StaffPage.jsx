@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   AlertCircle,
   X,
+  Edit2,
 } from 'lucide-react';
 import Card from '../../components/common/Card.jsx';
 import Button from '../../components/common/Button.jsx';
@@ -25,8 +26,12 @@ import Modal from '../../components/common/Modal.jsx';
 import LoadingSpinner from '../../components/common/LoadingSpinner.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
 import staffService from '../../services/staffService.js';
+import { useAuth } from '../../context/AuthContext.jsx';
 
 export const StaffPage = () => {
+  const { user, hasRole, hasPermission } = useAuth();
+  const canEditStaff = hasRole(['SUPER_ADMIN', 'ADMINISTRATOR', 'PRINCIPAL']) || hasPermission('staff:update');
+
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'directory');
   const [loading, setLoading] = useState(false);
@@ -59,12 +64,45 @@ export const StaffPage = () => {
     email: '',
     phone: '',
     gender: 'Male',
+    age: '',
+    dateOfBirth: '',
     departmentId: '',
     designationId: '',
     basicSalary: 3500,
     employmentType: 'Full-Time',
     customUsername: '',
     customPassword: '',
+  });
+
+  // Edit Staff Modal State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingStaffId, setEditingStaffId] = useState(null);
+  const [editForm, setEditForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    gender: 'Male',
+    age: '',
+    dateOfBirth: '',
+    departmentId: '',
+    designationId: '',
+    basicSalary: 3500,
+    employmentType: 'Full-Time',
+    status: 'Active',
+    qualification: '',
+    experienceYears: 0,
+    address: {
+      street: '',
+      city: '',
+      state: '',
+      postalCode: '',
+    },
+    emergencyContact: {
+      name: '',
+      relationship: '',
+      phone: '',
+    },
   });
 
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
@@ -162,6 +200,73 @@ export const StaffPage = () => {
   }, [activeTab, deptFilter, search, payrollMonth, payrollYear]);
 
   // Handlers
+  const handleOpenEdit = (emp) => {
+    setEditingStaffId(emp._id);
+
+    let calculatedAge = emp.age !== undefined && emp.age !== null ? emp.age : '';
+    let formattedDob = '';
+    if (emp.dateOfBirth) {
+      formattedDob = new Date(emp.dateOfBirth).toISOString().split('T')[0];
+      if (!calculatedAge) {
+        const today = new Date();
+        const birthDate = new Date(emp.dateOfBirth);
+        let a = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+          a--;
+        }
+        calculatedAge = a > 0 ? a : '';
+      }
+    }
+
+    setEditForm({
+      firstName: emp.firstName || '',
+      lastName: emp.lastName || '',
+      email: emp.email || '',
+      phone: emp.phone || '',
+      gender: emp.gender || 'Male',
+      age: calculatedAge,
+      dateOfBirth: formattedDob,
+      departmentId: emp.departmentId?._id || emp.departmentId || '',
+      designationId: emp.designationId?._id || emp.designationId || '',
+      basicSalary: emp.salaryStructure?.basicSalary ?? emp.basicSalary ?? 3500,
+      employmentType: emp.employmentType || 'Full-Time',
+      status: emp.status || 'Active',
+      qualification: emp.qualification || '',
+      experienceYears: emp.experienceYears || 0,
+      address: {
+        street: emp.address?.street || '',
+        city: emp.address?.city || '',
+        state: emp.address?.state || '',
+        postalCode: emp.address?.postalCode || '',
+      },
+      emergencyContact: {
+        name: emp.emergencyContact?.name || '',
+        relationship: emp.emergencyContact?.relationship || '',
+        phone: emp.emergencyContact?.phone || '',
+      },
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateEmployee = async (e) => {
+    e.preventDefault();
+    if (!editingStaffId) return;
+    try {
+      setLoading(true);
+      const res = await staffService.updateEmployee(editingStaffId, editForm);
+      showBanner('success', res.message || `Staff member ${editForm.firstName} ${editForm.lastName} updated successfully.`);
+      setIsEditModalOpen(false);
+      setEditingStaffId(null);
+      await loadEmployees();
+    } catch (err) {
+      console.error(err);
+      showBanner('error', err.response?.data?.message || err.message || 'Failed to update employee details.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCreateEmployee = async (e) => {
     e.preventDefault();
     try {
@@ -174,6 +279,8 @@ export const StaffPage = () => {
         email: '',
         phone: '',
         gender: 'Male',
+        age: '',
+        dateOfBirth: '',
         departmentId: '',
         designationId: '',
         basicSalary: 3500,
@@ -277,6 +384,13 @@ export const StaffPage = () => {
     ? designations.filter((d) => {
         const dDeptId = d.departmentId?._id || d.departmentId;
         return dDeptId?.toString() === employeeForm.departmentId?.toString();
+      })
+    : designations;
+
+  const filteredEditDesignations = editForm.departmentId
+    ? designations.filter((d) => {
+        const dDeptId = d.departmentId?._id || d.departmentId;
+        return dDeptId?.toString() === editForm.departmentId?.toString();
       })
     : designations;
 
@@ -445,40 +559,64 @@ export const StaffPage = () => {
                     <th className="py-3.5 px-4">Designation</th>
                     <th className="py-3.5 px-4 text-right">Basic Salary</th>
                     <th className="py-3.5 px-4 text-center">Status</th>
+                    {canEditStaff && <th className="py-3.5 px-4 text-right">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {employees.length > 0 ? (
-                    employees.map((emp) => (
-                      <tr key={emp._id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3 px-4 font-mono font-bold text-indigo-600">
-                          {emp.employeeId}
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="font-semibold text-slate-800">
-                            {emp.firstName} {emp.lastName}
-                          </div>
-                          <div className="text-xs text-slate-400">
-                            {emp.email} • {emp.phone}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <Badge variant="secondary">{emp.departmentId?.name || 'Department'}</Badge>
-                        </td>
-                        <td className="py-3 px-4 text-slate-700 font-medium">
-                          {emp.designationId?.title || 'Staff'}
-                        </td>
-                        <td className="py-3 px-4 text-right font-bold text-slate-900">
-                          ${emp.salaryStructure?.basicSalary || emp.basicSalary}
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <Badge variant="success">{emp.status}</Badge>
-                        </td>
-                      </tr>
-                    ))
+                    employees.map((emp) => {
+                      const empAge = emp.age !== undefined && emp.age !== null ? emp.age : emp.calculatedAge;
+                      return (
+                        <tr key={emp._id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3 px-4 font-mono font-bold text-indigo-600">
+                            {emp.employeeId}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="font-semibold text-slate-800 flex items-center gap-2">
+                              <span>{emp.firstName} {emp.lastName}</span>
+                              {empAge !== undefined && empAge !== null && empAge !== '' && (
+                                <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">
+                                  Age: {empAge}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-slate-400">
+                              {emp.email} • {emp.phone} {emp.gender ? `• ${emp.gender}` : ''}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <Badge variant="secondary">{emp.departmentId?.name || 'Department'}</Badge>
+                          </td>
+                          <td className="py-3 px-4 text-slate-700 font-medium">
+                            {emp.designationId?.title || 'Staff'}
+                          </td>
+                          <td className="py-3 px-4 text-right font-bold text-slate-900">
+                            ${emp.salaryStructure?.basicSalary || emp.basicSalary}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <Badge variant={emp.status === 'Active' ? 'success' : emp.status === 'On Leave' ? 'warning' : 'danger'}>
+                              {emp.status}
+                            </Badge>
+                          </td>
+                          {canEditStaff && (
+                            <td className="py-3 px-4 text-right">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => handleOpenEdit(emp)}
+                                icon={<Edit2 className="w-3.5 h-3.5" />}
+                                className="text-xs font-semibold text-slate-700 hover:text-indigo-600 hover:border-indigo-300"
+                              >
+                                Edit
+                              </Button>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })
                   ) : (
                     <tr>
-                      <td colSpan="6" className="py-12 text-center text-slate-400">
+                      <td colSpan={canEditStaff ? "7" : "6"} className="py-12 text-center text-slate-400">
                         No employees found. Click "Hire Employee" to register staff.
                       </td>
                     </tr>
@@ -868,12 +1006,70 @@ export const StaffPage = () => {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Phone Number *</label>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Mobile / Phone *</label>
               <input
                 type="tel"
                 required
                 value={employeeForm.phone}
                 onChange={(e) => setEmployeeForm({ ...employeeForm, phone: e.target.value })}
+                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Gender *</label>
+              <select
+                value={employeeForm.gender}
+                onChange={(e) => setEmployeeForm({ ...employeeForm, gender: e.target.value })}
+                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 bg-white"
+              >
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Age (Years)</label>
+              <input
+                type="number"
+                min="18"
+                max="100"
+                placeholder="e.g. 30"
+                value={employeeForm.age || ''}
+                onChange={(e) => {
+                  const ageVal = e.target.value;
+                  let newDob = employeeForm.dateOfBirth;
+                  if (ageVal && !newDob) {
+                    const approxYear = new Date().getFullYear() - Number(ageVal);
+                    newDob = `${approxYear}-01-01`;
+                  }
+                  setEmployeeForm({ ...employeeForm, age: ageVal, dateOfBirth: newDob });
+                }}
+                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Date of Birth</label>
+              <input
+                type="date"
+                value={employeeForm.dateOfBirth || ''}
+                onChange={(e) => {
+                  const dobVal = e.target.value;
+                  let newAge = employeeForm.age;
+                  if (dobVal) {
+                    const today = new Date();
+                    const birthDate = new Date(dobVal);
+                    let a = today.getFullYear() - birthDate.getFullYear();
+                    const m = today.getMonth() - birthDate.getMonth();
+                    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+                      a--;
+                    }
+                    if (a > 0) newAge = a;
+                  }
+                  setEmployeeForm({ ...employeeForm, dateOfBirth: dobVal, age: newAge });
+                }}
                 className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200"
               />
             </div>
@@ -1031,6 +1227,321 @@ export const StaffPage = () => {
             </Button>
             <Button variant="primary" type="submit">
               Register Employee
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ========================================================================= */}
+      {/* MODAL: EDIT EMPLOYEE */}
+      {/* ========================================================================= */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit Staff Member Details"
+      >
+        <form onSubmit={handleUpdateEmployee} className="space-y-4 max-h-[75vh] overflow-y-auto px-1">
+          {/* Section: Personal Information */}
+          <div className="border-b border-slate-100 pb-3">
+            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2.5">
+              Personal Information
+            </h4>
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">First Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.firstName}
+                  onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-hidden focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Last Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.lastName}
+                  onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-hidden focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Mobile No *</label>
+                <input
+                  type="tel"
+                  required
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-hidden focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Age (Years)</label>
+                <input
+                  type="number"
+                  min="18"
+                  max="100"
+                  placeholder="e.g. 32"
+                  value={editForm.age}
+                  onChange={(e) => {
+                    const ageVal = e.target.value;
+                    let newDob = editForm.dateOfBirth;
+                    if (ageVal && !newDob) {
+                      const approxYear = new Date().getFullYear() - Number(ageVal);
+                      newDob = `${approxYear}-01-01`;
+                    }
+                    setEditForm({ ...editForm, age: ageVal, dateOfBirth: newDob });
+                  }}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-hidden focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Date of Birth</label>
+                <input
+                  type="date"
+                  value={editForm.dateOfBirth}
+                  onChange={(e) => {
+                    const dobVal = e.target.value;
+                    let newAge = editForm.age;
+                    if (dobVal) {
+                      const today = new Date();
+                      const birthDate = new Date(dobVal);
+                      let a = today.getFullYear() - birthDate.getFullYear();
+                      const m = today.getMonth() - birthDate.getMonth();
+                      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+                        a--;
+                      }
+                      if (a > 0) newAge = a;
+                    }
+                    setEditForm({ ...editForm, dateOfBirth: dobVal, age: newAge });
+                  }}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-hidden focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Gender *</label>
+                <select
+                  value={editForm.gender}
+                  onChange={(e) => setEditForm({ ...editForm, gender: e.target.value })}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 bg-white focus:outline-hidden focus:border-indigo-500"
+                >
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Work Email *</label>
+                <input
+                  type="email"
+                  required
+                  value={editForm.email}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-hidden focus:border-indigo-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section: Job & Department */}
+          <div className="border-b border-slate-100 pb-3">
+            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2.5">
+              Employment & Designation
+            </h4>
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Department *</label>
+                <select
+                  required
+                  value={editForm.departmentId}
+                  onChange={(e) => {
+                    const newDeptId = e.target.value;
+                    const currentDesig = designations.find((d) => d._id === editForm.designationId);
+                    const desigDeptId = currentDesig?.departmentId?._id || currentDesig?.departmentId;
+                    setEditForm({
+                      ...editForm,
+                      departmentId: newDeptId,
+                      designationId: newDeptId && desigDeptId?.toString() !== newDeptId?.toString() ? '' : editForm.designationId,
+                    });
+                  }}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 bg-white"
+                >
+                  <option value="">Select Department</option>
+                  {departments.map((d) => (
+                    <option key={d._id} value={d._id}>
+                      {d.name} ({d.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Designation *</label>
+                <select
+                  required
+                  value={editForm.designationId}
+                  onChange={(e) => {
+                    const selId = e.target.value;
+                    const chosenDesig = designations.find((d) => d._id === selId);
+                    const desigDeptId = chosenDesig?.departmentId?._id || chosenDesig?.departmentId;
+                    setEditForm({
+                      ...editForm,
+                      designationId: selId,
+                      departmentId: (!editForm.departmentId && desigDeptId) ? desigDeptId : editForm.departmentId,
+                    });
+                  }}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 bg-white"
+                >
+                  <option value="">Select Designation</option>
+                  {filteredEditDesignations.map((d) => (
+                    <option key={d._id} value={d._id}>
+                      {d.title} {!editForm.departmentId && d.departmentId?.name ? `(${d.departmentId.name})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Employment Type</label>
+                <select
+                  value={editForm.employmentType}
+                  onChange={(e) => setEditForm({ ...editForm, employmentType: e.target.value })}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 bg-white"
+                >
+                  <option value="Full-Time">Full-Time</option>
+                  <option value="Part-Time">Part-Time</option>
+                  <option value="Contract">Contract</option>
+                  <option value="Probation">Probation</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Status</label>
+                <select
+                  value={editForm.status}
+                  onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 bg-white font-semibold"
+                >
+                  <option value="Active">Active</option>
+                  <option value="On Leave">On Leave</option>
+                  <option value="Suspended">Suspended</option>
+                  <option value="Terminated">Terminated</option>
+                  <option value="Resigned">Resigned</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Basic Salary ($) *</label>
+                <input
+                  type="number"
+                  min="0"
+                  required
+                  value={editForm.basicSalary}
+                  onChange={(e) => setEditForm({ ...editForm, basicSalary: Number(e.target.value) })}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 font-bold"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Qualification</label>
+                <input
+                  type="text"
+                  placeholder="e.g. M.Sc. Mathematics, B.Ed."
+                  value={editForm.qualification}
+                  onChange={(e) => setEditForm({ ...editForm, qualification: e.target.value })}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Experience (Years)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editForm.experienceYears}
+                  onChange={(e) => setEditForm({ ...editForm, experienceYears: Number(e.target.value) })}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section: Address & Emergency Contact */}
+          <div>
+            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2.5">
+              Address & Emergency Details
+            </h4>
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Street Address</label>
+                <input
+                  type="text"
+                  placeholder="Street / Flat / House"
+                  value={editForm.address.street}
+                  onChange={(e) => setEditForm({ ...editForm, address: { ...editForm.address, street: e.target.value } })}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">City</label>
+                <input
+                  type="text"
+                  placeholder="City"
+                  value={editForm.address.city}
+                  onChange={(e) => setEditForm({ ...editForm, address: { ...editForm.address, city: e.target.value } })}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">State</label>
+                <input
+                  type="text"
+                  placeholder="State"
+                  value={editForm.address.state}
+                  onChange={(e) => setEditForm({ ...editForm, address: { ...editForm.address, state: e.target.value } })}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Postal Code</label>
+                <input
+                  type="text"
+                  placeholder="ZIP / PIN"
+                  value={editForm.address.postalCode}
+                  onChange={(e) => setEditForm({ ...editForm, address: { ...editForm.address, postalCode: e.target.value } })}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Emergency Phone</label>
+                <input
+                  type="tel"
+                  placeholder="Emergency phone"
+                  value={editForm.emergencyContact.phone}
+                  onChange={(e) => setEditForm({ ...editForm, emergencyContact: { ...editForm.emergencyContact, phone: e.target.value } })}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+            <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit" disabled={loading}>
+              Save Changes
             </Button>
           </div>
         </form>

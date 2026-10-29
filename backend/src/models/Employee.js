@@ -47,6 +47,9 @@ const employeeSchema = new mongoose.Schema(
     dateOfBirth: {
       type: Date,
     },
+    age: {
+      type: Number,
+    },
     departmentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Department',

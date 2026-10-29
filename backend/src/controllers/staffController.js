@@ -102,6 +102,7 @@ export const createEmployee = async (req, res, next) => {
       phone,
       gender,
       dateOfBirth,
+      age,
       departmentId,
       designationId,
       basicSalary = 3000,
@@ -124,6 +125,20 @@ export const createEmployee = async (req, res, next) => {
 
     const employeeId = await generateEmployeeId();
 
+    let calcAge = age !== undefined && age !== null && age !== '' ? Number(age) : null;
+    let dob = dateOfBirth ? new Date(dateOfBirth) : null;
+    if (dob && calcAge === null) {
+      const today = new Date();
+      calcAge = today.getFullYear() - dob.getFullYear();
+      const m = today.getMonth() - dob.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+        calcAge--;
+      }
+    } else if (calcAge !== null && !dob) {
+      const approxYear = new Date().getFullYear() - calcAge;
+      dob = new Date(`${approxYear}-01-01`);
+    }
+
     const employee = await Employee.create({
       employeeId,
       firstName: firstName.trim(),
@@ -131,7 +146,8 @@ export const createEmployee = async (req, res, next) => {
       email: email.trim().toLowerCase(),
       phone: phone.trim(),
       gender,
-      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+      dateOfBirth: dob,
+      age: calcAge,
       departmentId,
       designationId,
       employmentType,
@@ -296,19 +312,120 @@ export const getEmployeeById = async (req, res, next) => {
 export const updateEmployee = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    const updates = { ...req.body };
 
-    const employee = await Employee.findByIdAndUpdate(id, updates, { new: true })
-      .populate('departmentId', 'name code')
-      .populate('designationId', 'title code');
-
+    const employee = await Employee.findById(id);
     if (!employee) {
       return res.status(404).json({ success: false, message: 'Employee not found' });
     }
 
+    // Update Name
+    if (updates.firstName !== undefined) employee.firstName = updates.firstName.trim();
+    if (updates.lastName !== undefined) employee.lastName = updates.lastName.trim();
+
+    // Update Mobile No / Phone
+    if (updates.phone !== undefined) employee.phone = updates.phone.trim();
+
+    // Update Email
+    if (updates.email !== undefined) {
+      const newEmail = updates.email.trim().toLowerCase();
+      if (newEmail !== employee.email) {
+        const existing = await Employee.findOne({ email: newEmail, _id: { $ne: employee._id } });
+        if (existing) {
+          return res.status(400).json({ success: false, message: 'Email address is already in use by another staff member' });
+        }
+        employee.email = newEmail;
+      }
+    }
+
+    // Update Gender
+    if (updates.gender !== undefined) employee.gender = updates.gender;
+
+    // Update Age and Date of Birth
+    if (updates.dateOfBirth) {
+      const dob = new Date(updates.dateOfBirth);
+      employee.dateOfBirth = dob;
+      if (updates.age !== undefined && updates.age !== null && updates.age !== '') {
+        employee.age = Number(updates.age);
+      } else {
+        const today = new Date();
+        let calcAge = today.getFullYear() - dob.getFullYear();
+        const m = today.getMonth() - dob.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+          calcAge--;
+        }
+        employee.age = calcAge;
+      }
+    } else if (updates.age !== undefined && updates.age !== null && updates.age !== '') {
+      employee.age = Number(updates.age);
+      if (!employee.dateOfBirth) {
+        const approxYear = new Date().getFullYear() - Number(updates.age);
+        employee.dateOfBirth = new Date(`${approxYear}-01-01`);
+      }
+    }
+
+    // Update Department & Designation
+    if (updates.departmentId !== undefined && updates.departmentId) {
+      employee.departmentId = updates.departmentId;
+    }
+    if (updates.designationId !== undefined && updates.designationId) {
+      employee.designationId = updates.designationId;
+    }
+
+    // Update Employment Type & Status
+    if (updates.employmentType !== undefined) employee.employmentType = updates.employmentType;
+    if (updates.status !== undefined) employee.status = updates.status;
+
+    // Update Qualifications & Experience
+    if (updates.qualification !== undefined) employee.qualification = updates.qualification?.trim();
+    if (updates.experienceYears !== undefined) employee.experienceYears = Number(updates.experienceYears);
+
+    // Update Basic Salary
+    if (updates.basicSalary !== undefined) {
+      if (!employee.salaryStructure) employee.salaryStructure = {};
+      employee.salaryStructure.basicSalary = Number(updates.basicSalary);
+    }
+
+    // Update Address & Emergency Contact
+    if (updates.address) {
+      employee.address = {
+        ...(employee.address?.toObject?.() || employee.address || {}),
+        ...updates.address,
+      };
+    }
+    if (updates.emergencyContact) {
+      employee.emergencyContact = {
+        ...(employee.emergencyContact?.toObject?.() || employee.emergencyContact || {}),
+        ...updates.emergencyContact,
+      };
+    }
+
+    await employee.save();
+
+    // Sync linked user login account if applicable
+    if (employee.userId) {
+      try {
+        const userUpdates = {};
+        if (updates.email) userUpdates.email = employee.email;
+        if (updates.status) {
+          userUpdates.isActive = updates.status === 'Active' || updates.status === 'On Leave';
+        }
+        if (Object.keys(userUpdates).length > 0) {
+          await User.findByIdAndUpdate(employee.userId, userUpdates);
+        }
+      } catch (userErr) {
+        console.warn('[Staff] User sync warning during employee update:', userErr.message);
+      }
+    }
+
+    const populated = await Employee.findById(employee._id)
+      .populate('departmentId', 'name code')
+      .populate('designationId', 'title code')
+      .populate('userId', 'username email isActive');
+
     res.status(200).json({
       success: true,
-      data: employee,
+      data: populated,
       message: 'Employee record updated successfully',
     });
   } catch (error) {
